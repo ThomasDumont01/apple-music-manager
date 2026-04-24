@@ -48,12 +48,13 @@ Music Manager                                502 pistes · 34 albums
 ### Via le DMG (recommande)
 
 1. Telecharger le fichier `.dmg` depuis les [Releases](https://github.com/ThomasDumont01/apple-music-manager/releases/latest)
-2. Ouvrir le DMG et double-cliquer sur **Installer Music Manager**
-3. L'installation est automatique (~2 minutes) :
+2. Ouvrir le DMG
+3. Clic sur **Installer Music Manager**. L'app n'est pas signee Apple, macOS peu bloquer le lancement. Si c'est le cas : **Reglages Systeme → Confidentialite et securite → Autoriser quand meme → Relancer le dmg**
+4. L'installation est automatique (~2 minutes) :
    - Installe Homebrew si absent
    - Installe ffmpeg et yt-dlp via brew
    - Installe Music Manager dans `/Applications`
-4. L'app s'ouvre automatiquement a la fin
+5. L'app s'ouvre automatiquement a la fin
 
 ### Via la ligne de commande
 
