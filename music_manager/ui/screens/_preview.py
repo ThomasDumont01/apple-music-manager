@@ -65,6 +65,6 @@ class PreviewMixin(_MixinBase):
             return
         cover_url = self._fix_albums[self._fix_album_idx].cover_url
         if cover_url:
-            import webbrowser  # noqa: PLC0415
+            from music_manager.services.apple import open_url_over_music  # noqa: PLC0415
 
-            webbrowser.open(cover_url)
+            open_url_over_music(cover_url)

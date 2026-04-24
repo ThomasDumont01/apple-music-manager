@@ -448,13 +448,13 @@ class IdentifyMixin(_MixinBase):
 
     def _identify_preview_album(self) -> None:
         """Open selected album on Deezer in browser."""
-        import webbrowser  # noqa: PLC0415
+        from music_manager.services.apple import open_url_over_music  # noqa: PLC0415
 
         if self._modify_cursor >= len(self._modify_editions):
             return
         album_id = self._modify_editions[self._modify_cursor].get("album_id", 0)
         if album_id:
-            webbrowser.open(f"https://www.deezer.com/album/{album_id}")
+            open_url_over_music(f"https://www.deezer.com/album/{album_id}")
 
     def _identify_album_select(self) -> None:
         """User selected a Deezer album — match all tracks."""

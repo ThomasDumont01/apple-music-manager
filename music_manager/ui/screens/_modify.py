@@ -397,8 +397,9 @@ class ModifyMixin(_MixinBase):
 
     def _modify_replace_url(self) -> None:
         """Show input for YouTube URL."""
-        import webbrowser  # noqa: PLC0415
         from urllib.parse import quote_plus  # noqa: PLC0415
+
+        from music_manager.services.apple import open_url_over_music  # noqa: PLC0415
 
         trk = self._modify_selected_track
         if not trk:
@@ -406,7 +407,7 @@ class ModifyMixin(_MixinBase):
 
         # Open YouTube search
         query = f"{trk.title} {trk.artist}"
-        webbrowser.open(f"https://www.youtube.com/results?search_query={quote_plus(query)}")
+        open_url_over_music(f"https://www.youtube.com/results?search_query={quote_plus(query)}")
 
         self._view = "modify_meta_edit"
         self._modify_editing_field = "__youtube_url__"
@@ -613,14 +614,14 @@ class ModifyMixin(_MixinBase):
 
     def _modify_preview_cover(self) -> None:
         """Open cover in browser for preview."""
-        import webbrowser  # noqa: PLC0415
+        from music_manager.services.apple import open_url_over_music  # noqa: PLC0415
 
         if self._modify_cursor >= len(self._modify_covers):
             return
         cover = self._modify_covers[self._modify_cursor]
         url = cover.get("url", "") or cover.get("thumbnail", "")
         if url:
-            webbrowser.open(url)
+            open_url_over_music(url)
 
     # ── Modify: metadata ───────────────────────────────────────────────────
 

@@ -437,6 +437,32 @@ def run_applescript(script: str) -> str | None:
         return None
 
 
+def open_url_over_music(url: str) -> None:
+    """Open a URL in Safari, positioned exactly over the Apple Music window."""
+    safe_url = _esc(url)
+    run_applescript(f'''
+        -- Get Music window bounds (fallback to screen center)
+        set musicBounds to {{200, 200, 1200, 800}}
+        try
+            tell application "Music"
+                if (count of windows) > 0 then
+                    set musicBounds to bounds of front window
+                end if
+            end tell
+        end try
+
+        -- Open URL in Safari and match bounds
+        tell application "Safari"
+            open location "{safe_url}"
+            delay 0.5
+            if (count of windows) > 0 then
+                set bounds of front window to musicBounds
+            end if
+            activate
+        end tell
+    ''')
+
+
 def _esc(value: str) -> str:
     """Escape a string for safe inclusion in AppleScript."""
     return (

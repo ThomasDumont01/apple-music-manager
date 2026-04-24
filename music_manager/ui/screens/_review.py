@@ -472,16 +472,17 @@ class ReviewMixin(_MixinBase):
 
     def _open_search(self, search_type: str) -> None:
         """Open browser and show URL input below the current review body."""
-        import webbrowser  # noqa: PLC0415
         from urllib.parse import quote_plus  # noqa: PLC0415
+
+        from music_manager.services.apple import open_url_over_music  # noqa: PLC0415
 
         pending = self._pending[self._pending_idx]
         query = f"{pending.csv_title} {pending.csv_artist}"
 
         if search_type == "deezer":
-            webbrowser.open(f"https://www.deezer.com/search/{quote_plus(query)}")
+            open_url_over_music(f"https://www.deezer.com/search/{quote_plus(query)}")
         else:
-            webbrowser.open(f"https://www.youtube.com/results?search_query={quote_plus(query)}")
+            open_url_over_music(f"https://www.youtube.com/results?search_query={quote_plus(query)}")
 
         self._search_type = search_type
         self._view = "search_input"
