@@ -89,14 +89,14 @@ class CompleteMixin(_MixinBase):
         )
 
     def _complete_select(self) -> None:
-        """Enter on complete: toggle checkbox or execute action."""
+        """Enter on complete: launch batch for selected albums."""
         num_albums = len(self._complete_albums)
         if self._complete_cursor < num_albums:
-            # Toggle checkbox (same as Space)
-            self._complete_checks[self._complete_cursor] = not self._complete_checks[
-                self._complete_cursor
+            selected = [
+                a for a, checked in zip(self._complete_albums, self._complete_checks) if checked
             ]
-            self._refresh_complete_body()
+            if selected:
+                self._run_complete_batch(selected)
             return
         action_idx = self._complete_cursor - num_albums
         if action_idx == 0:
@@ -120,7 +120,11 @@ class CompleteMixin(_MixinBase):
         total_imported = 0
         total_failed = 0
 
+        self._cancel_requested = False
+
         for album_idx, album in enumerate(albums):
+            if self._cancel_requested:
+                break
             album_id = album["album_id"]
             album_title = album.get("title", "")
 
