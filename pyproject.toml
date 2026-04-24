@@ -1,15 +1,22 @@
 [project]
 name = "music-manager"
-version = "0.1.0"
-description = "Import de morceaux dans Apple Music via CSV."
+version = "1.0.0"
+description = "Import tracks into Apple Music with HD artwork and official audio."
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "textual>=3.0",             # UI terminal
-    "mutagen>=1.47",            # tagging audio
+    "mutagen>=1.47",            # tagging audio (M4A + MP3)
     "requests>=2.31",           # HTTP (Deezer, iTunes, covers)
-    "musicbrainzngs>=0.7",      # fallback silencieux
-    "rapidfuzz>=3.14.5",
+    "rapidfuzz>=3.14.5",        # fuzzy matching
+    "pyobjc-framework-iTunesLibrary>=11.0",  # Apple Music scan (macOS)
 ]
+
+[project.urls]
+Homepage = "https://github.com/ThomasDumont01/apple-music-manager"
+Repository = "https://github.com/ThomasDumont01/apple-music-manager"
+Issues = "https://github.com/ThomasDumont01/apple-music-manager/issues"
+Download = "https://github.com/ThomasDumont01/apple-music-manager/releases/latest"
 
 [project.scripts]
 music-manager = "music_manager.__main__:main"
@@ -20,6 +27,9 @@ dev = [
     "ruff>=0.9",
     "textual-dev>=1.7",         # outils debug Textual (console, devtools)
     "pytest-asyncio>=0.25",     # Textual est async, les tests aussi
+    "pyright>=1.1.409",
+    "bandit>=1.9.4",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.ruff]
@@ -32,7 +42,8 @@ select = ["E", "F", "W", "I", "UP", "PLC", "PLE", "PLW"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["integration: tests requiring Apple Music and real audio files"]
 
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.build" 
+build-backend = "hatchling.build"

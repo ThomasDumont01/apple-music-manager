@@ -12,9 +12,21 @@ wheels/
 # macOS
 .DS_Store
 
-# Logs et données temporaires
-.pytest_cache/
-*.jsonl
+# IDE / tools cache
+.ruff_cache/
+.claude/
+.mypy_cache/
 
-# Config locale
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.jsonl
+*.log
+
+# Private (dev tooling, not for public repo)
+CLAUDE.md
 notes.txt
+.python-version

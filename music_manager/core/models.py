@@ -2,7 +2,7 @@
 
 ISRC (International Standard Recording Code) is used as the universal
 identifier. It's the only metadata field guaranteed to stay the same
-across platforms (Deezer, Apple Music, MusicBrainz). Unlike the track
+across platforms (Deezer, Apple Music). Unlike the track
 title or artist name — which can vary slightly between platforms
 ("Bohemian Rhapsody" vs "Bohemian Rhapsody - Remastered 2011") — the
 ISRC is stable and unique per recording.
@@ -13,7 +13,7 @@ Three models:
 - LibraryEntry: track already in the Apple Music library, keyed by apple_id
 """
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from typing import Self
 
 # ── Base ─────────────────────────────────────────────────────────────────────
@@ -23,14 +23,17 @@ from typing import Self
 class _BaseEntry:
     """Base class with dict ↔ object conversion for JSON persistence."""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Convert the dataclass instance to a dictionary."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> Self:
+    def from_dict(cls, data: dict[str, object]) -> Self:
         """Create an instance of the dataclass from a dictionary."""
-        known_fields = {field.name for field in fields(cls)}
+        # Backwards compat: total_disks was renamed to total_discs
+        if "total_disks" in data and "total_discs" not in data:
+            data = {**data, "total_discs": data["total_disks"]}
+        known_fields = {fld.name for fld in fields(cls)}
         filtered = {key: value for key, value in data.items() if key in known_fields}
         return cls(**filtered)
 
@@ -59,6 +62,7 @@ class Track(_BaseEntry):
     track_number: int | None = None
     total_tracks: int | None = None
     disk_number: int = 1
+    total_discs: int = 0
     album_artist: str = ""
 
     # Technical
@@ -138,5 +142,39 @@ class LibraryEntry(_BaseEntry):
     # Technical
     duration: float = 0.0
     explicit: bool = False
+    has_artwork: bool = False
     isrc: str = ""
     file_path: str = ""
+
+
+# ── PendingTrack (blocked import, awaiting review) ─────────────────────────
+
+
+@dataclass
+class PendingTrack:
+    """Track that could not be imported automatically.
+
+    Created by import_resolved_track() when a step fails or needs
+    user decision. Lives in memory only (not persisted).
+    """
+
+    reason: str  # "not_found", "mismatch", "ambiguous", "youtube_failed", "duration_suspect"
+
+    # Original CSV request
+    csv_title: str = ""
+    csv_artist: str = ""
+    csv_album: str = ""
+
+    # Resolved track (None if not_found)
+    track: Track | None = None
+
+    # Mismatch detail
+    album_mismatch: bool = False
+
+    # Deezer candidates (for ambiguous)
+    candidates: list[dict] = field(default_factory=list)
+
+    # YouTube data (for duration_suspect)
+    dl_path: str = ""
+    actual_duration: int = 0
+    youtube_candidates: list[dict] = field(default_factory=list)
