@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from music_manager.core.io import load_json, save_json
 from music_manager.options.maintenance import (
     clear_preferences,
@@ -95,8 +97,12 @@ def test_revert_imports_nothing_to_revert(mock_delete, tmp_path: Path) -> None:
 # ── delete_all ─────────────────────────────────────────────────────────────
 
 
-def test_delete_all_removes_data_dir(tmp_path: Path) -> None:
-    """Deletes .data/ directory."""
+def test_delete_all_removes_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deletes .data/ directory and config dir."""
+    fake_config_dir = tmp_path / "config"
+    fake_config_dir.mkdir()
+    monkeypatch.setattr("music_manager.core.config.CONFIG_DIR", str(fake_config_dir))
+
     data_dir = tmp_path / ".data"
     data_dir.mkdir()
     (data_dir / "tracks.json").write_text("{}")
@@ -106,9 +112,13 @@ def test_delete_all_removes_data_dir(tmp_path: Path) -> None:
 
     assert result is True
     assert not data_dir.exists()
+    assert not fake_config_dir.exists()
 
 
-def test_delete_all_no_data_dir(tmp_path: Path) -> None:
+def test_delete_all_no_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No .data/ → returns False, no crash."""
+    fake_config_dir = tmp_path / "config_empty"
+    monkeypatch.setattr("music_manager.core.config.CONFIG_DIR", str(fake_config_dir))
+
     result = delete_all(str(tmp_path))
     assert result is False

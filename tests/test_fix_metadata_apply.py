@@ -110,8 +110,10 @@ def test_apply_updates_apple_cache(mock_update, tmp_path: Path) -> None:
 @patch("music_manager.services.resolver.download_cover_file")
 def test_apply_cover_success(mock_dl, mock_write, mock_art, tmp_path: Path) -> None:
     """Cover correction: download → write_cover → set_artwork."""
+    fake_audio = tmp_path / "s.m4a"
+    fake_audio.write_bytes(b"\x00")
     tracks = Tracks(str(tmp_path / "t.json"))
-    tracks.add("A1", {"title": "S", "file_path": "/music/s.m4a"})
+    tracks.add("A1", {"title": "S", "file_path": str(fake_audio)})
 
     mock_dl.return_value = "/tmp/cover_fix.jpg"
 

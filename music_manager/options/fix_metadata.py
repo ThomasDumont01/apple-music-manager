@@ -200,8 +200,10 @@ def find_all_divergences(
                 # Use tracks_store file_path (synced at launch) over Apple cache
                 first_entry = tracks.get(first_apple_id, {})
                 cover_fp = first_entry.get("file_path") or first_lib.file_path
+                if cover_fp and not os.path.isfile(cover_fp):
+                    cover_fp = ""  # File moved/deleted — skip cover check
                 cw, ch = get_cover_dimensions(cover_fp) if cover_fp else (0, 0)
-                if cw == 0:
+                if cw == 0 and cover_fp:
                     # Cover unreadable by mutagen — propose fix
                     needs_cover = True
                 elif cw < 1000 or ch < 1000 or cw != ch:
@@ -321,7 +323,7 @@ def apply_corrections(
                 if not file_path and apple_store:
                     lib_e = apple_store.get_all().get(apple_id)
                     file_path = lib_e.file_path if lib_e else ""
-                if file_path:
+                if file_path and os.path.isfile(file_path):
                     write_cover(file_path, tmp_path)
                 if apple_store:
                     lib_e = apple_store.get_all().get(apple_id)
@@ -640,7 +642,7 @@ def _auto_fix_store(
         if not lib_entry:
             continue
         fp = entry.get("file_path") or lib_entry.file_path
-        if not fp or not fp.lower().endswith(".mp3"):
+        if not fp or not fp.lower().endswith(".mp3") or not os.path.isfile(fp):
             continue
 
         # Strip YouTube tags that cause album splits
