@@ -104,6 +104,7 @@ def complete_album(
     albums_store: Albums,
     on_progress: Callable[[int, int], None] | None = None,
     preferences_path: str = "",
+    should_cancel: Callable[[], bool] | None = None,
 ) -> CompleteResult:
     """Import missing tracks for one album."""
     result = CompleteResult()
@@ -136,6 +137,8 @@ def complete_album(
 
     total = len(missing)
     for idx, dz_track in enumerate(missing):
+        if should_cancel and should_cancel():
+            break
         if on_progress:
             on_progress(idx + 1, total)
 

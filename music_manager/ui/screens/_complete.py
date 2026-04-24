@@ -147,6 +147,7 @@ class CompleteMixin(_MixinBase):
                     self._albums_store,
                     on_progress=on_progress,
                     preferences_path=prefs_path,
+                    should_cancel=lambda: self._cancel_requested,
                 )
                 total_imported += result.tracks_imported
                 total_failed += len(result.pending)

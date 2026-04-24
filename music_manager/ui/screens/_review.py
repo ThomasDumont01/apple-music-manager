@@ -13,8 +13,8 @@ from music_manager.ui.render import (
     render_review_body,
     render_review_header,
 )
-from music_manager.ui.text import HELP_BACK
 from music_manager.ui.text import (
+    HELP_BACK,
     HELP_IMPORT,
     HELP_REVIEW,
     HELP_REVIEW_BATCH,

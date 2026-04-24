@@ -453,7 +453,8 @@ def open_url_over_music(url: str) -> None:
         try
             set dh to do shell script "defaults read com.apple.dock autohide 2>/dev/null || echo 0"
             if dh is "0" then
-                set ds to (do shell script "defaults read com.apple.dock tilesize 2>/dev/null || echo 48") as integer
+                set ds to (do shell script ¬
+                    "defaults read com.apple.dock tilesize 2>/dev/null || echo 48") as integer
                 set dockH to ds + 16
             end if
         end try
