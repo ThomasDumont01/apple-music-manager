@@ -64,8 +64,8 @@ def test_different_isrc_case_insensitive_not_conflict(tmp_path: Path) -> None:
     assert is_duplicate("abc123", "Song", "Artist", store) is True
 
 
-def test_truly_different_isrc_is_not_duplicate(tmp_path: Path) -> None:
-    """Different ISRCs with similar titles are NOT duplicates."""
+def test_different_isrc_same_title_artist_is_duplicate(tmp_path: Path) -> None:
+    """Same title+artist with different ISRCs = same song, different edition/territory."""
     store = Tracks(str(tmp_path / "tracks.json"))
     store.add(
         "A1",
@@ -78,9 +78,30 @@ def test_truly_different_isrc_is_not_duplicate(tmp_path: Path) -> None:
         },
     )
 
-    # Different ISRC → different recording, not duplicate
+    # Different ISRC but exact title+artist → duplicate (cross-territory ISRC)
     assert (
-        is_duplicate("GBUM70900209", "Dog Days Are Over", "Florence + The Machine", store) is False
+        is_duplicate("GBUM70900209", "Dog Days Are Over", "Florence + The Machine", store) is True
+    )
+
+
+def test_different_isrc_different_title_not_duplicate(tmp_path: Path) -> None:
+    """Different ISRC + different title = genuinely different recording."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    store.add(
+        "A1",
+        {
+            "title": "Dog Days Are Over",
+            "artist": "Florence + The Machine",
+            "isrc": "GBUM70905782",
+            "status": "done",
+            "deezer_id": 1,
+        },
+    )
+
+    # Different ISRC AND different title → not duplicate
+    assert (
+        is_duplicate("GBUM70900209", "Dog Days Are Over (Live)", "Florence + The Machine", store)
+        is False
     )
 
 

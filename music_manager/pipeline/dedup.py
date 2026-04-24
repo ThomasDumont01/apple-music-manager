@@ -44,20 +44,11 @@ def is_duplicate(
     norm_artist = normalize(artist)
 
     # Level 2: O(1) index lookup by normalized title+artist
+    # Exact title+artist match is strong enough — ISRC can differ across
+    # editions/territories (Spotify vs Deezer vs Apple) for the same song.
     entry = tracks_store.get_by_title_artist(norm_title, norm_artist)
     if entry and _is_valid(entry):
-        # If both have ISRC and they differ → different recordings
-        entry_isrc = (entry.get("isrc", "") or "").upper()
-        if not (isrc and entry_isrc and isrc != entry_isrc):
-            return True
-        # ISRC conflict but same CSV origin → already processed from same source
-        csv_t = entry.get("csv_title") or ""
-        if (
-            csv_t
-            and normalize(csv_t) == norm_title
-            and normalize(entry.get("csv_artist") or "") == norm_artist
-        ):
-            return True
+        return True
 
     # Level 2b + Level 3: need linear scan for soft matching
     prep_title = prepare_title(title)
@@ -67,20 +58,11 @@ def is_duplicate(
         if not _is_valid(entry):
             continue
 
-        # If both have ISRC and they differ → different recordings, skip soft checks
-        # Unless same CSV origin (same track imported from different source with different ISRC)
         entry_isrc = (entry.get("isrc", "") or "").upper()
-        if isrc and entry_isrc and isrc != entry_isrc:
-            csv_t = entry.get("csv_title") or ""
-            if (
-                csv_t
-                and normalize(csv_t) == norm_title
-                and normalize(entry.get("csv_artist") or "") == norm_artist
-            ):
-                return True
-            continue
+        isrc_conflict = bool(isrc and entry_isrc and isrc != entry_isrc)
 
         # Level 2b: strict normalize against stored CSV title
+        # Exact match is reliable even with ISRC conflict (same song, different edition)
         csv_t = entry.get("csv_title") or ""
         if (
             csv_t
@@ -90,6 +72,10 @@ def is_duplicate(
             return True
 
         # Level 3: soft fallback — strips parens + primary artist only
+        # Skip if ISRC conflict (fuzzy match too weak for conflicting ISRCs)
+        if isrc_conflict:
+            continue
+
         if (
             prepare_title(entry.get("title") or "") == prep_title
             and normalize(first_artist(entry.get("artist") or "")) == first_norm_artist

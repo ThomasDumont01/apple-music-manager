@@ -142,8 +142,8 @@ def test_two_entries_same_title_different_isrc_conflict(tmp_path: Path) -> None:
             "deezer_id": 1,
         },
     )
-    # Third ISRC differs from both → not a dup
-    assert is_duplicate("ISRC_C", "Song", "Art", store) is False
+    # Third ISRC differs from both, but title+artist matches A1 → duplicate
+    assert is_duplicate("ISRC_C", "Song", "Art", store) is True
 
 
 def test_csv_title_match_bypasses_isrc_conflict(tmp_path: Path) -> None:
@@ -165,8 +165,8 @@ def test_csv_title_match_bypasses_isrc_conflict(tmp_path: Path) -> None:
     assert is_duplicate("ISRC_B", "My Song", "Art", store) is True
 
 
-def test_no_csv_title_isrc_conflict_not_duplicate(tmp_path: Path) -> None:
-    """Without csv_title, ISRC conflict still blocks the match."""
+def test_no_csv_title_isrc_conflict_still_duplicate(tmp_path: Path) -> None:
+    """Exact title+artist match = duplicate even without csv_title and with ISRC conflict."""
     store = Tracks(str(tmp_path / "tracks.json"))
     store.add(
         "A1",
@@ -178,7 +178,8 @@ def test_no_csv_title_isrc_conflict_not_duplicate(tmp_path: Path) -> None:
             "deezer_id": 1,
         },
     )
-    assert is_duplicate("ISRC_B", "My Song", "Art", store) is False
+    # Same title+artist → duplicate (cross-territory ISRC)
+    assert is_duplicate("ISRC_B", "My Song", "Art", store) is True
 
 
 def test_failed_entry_then_done_entry_same_isrc(tmp_path: Path) -> None:
@@ -205,8 +206,8 @@ def test_failed_entry_then_done_entry_same_isrc(tmp_path: Path) -> None:
         },
     )
     # ISRC1 matched by Level 1 but failed → skip
-    # Level 2 finds A2 but ISRC1 != ISRC2 → conflict → skip
-    assert is_duplicate("ISRC1", "Song", "Art", store) is False
+    # Level 2 finds A2 by title+artist → duplicate (ISRC conflict ignored for exact match)
+    assert is_duplicate("ISRC1", "Song", "Art", store) is True
 
 
 # ── None values in store ──────────────────────────────────────────────────

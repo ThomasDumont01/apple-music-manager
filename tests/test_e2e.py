@@ -190,8 +190,8 @@ def test_e2e_import_then_change_edition(
     assert tracks.get_by_isrc("ISRC_NEW") is not None
     # Dedup detects new entry
     assert is_duplicate("ISRC_NEW", "Song", "Art", tracks) is True
-    # Old ISRC no longer detected
-    assert is_duplicate("ISRC_OLD", "Song", "Art", tracks) is False
+    # Old ISRC gone but title+artist still match new entry → still duplicate
+    assert is_duplicate("ISRC_OLD", "Song", "Art", tracks) is True
 
 
 # ══════════════════════════════════════════════════════════════════════════
