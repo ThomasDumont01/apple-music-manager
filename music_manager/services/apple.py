@@ -438,25 +438,39 @@ def run_applescript(script: str) -> str | None:
 
 
 def open_url_over_music(url: str) -> None:
-    """Open a URL in Safari, positioned exactly over the Apple Music window."""
+    """Open a URL in Safari, filling the available screen space (dock-aware)."""
     safe_url = _esc(url)
     run_applescript(f'''
-        -- Get Music window bounds (fallback to screen center)
-        set musicBounds to {{200, 200, 1200, 800}}
+        -- Screen dimensions
+        tell application "Finder"
+            set db to bounds of window of desktop
+            set sw to item 3 of db
+            set sh to item 4 of db
+        end tell
+
+        -- Dock height
+        set dockH to 0
         try
-            tell application "Music"
-                if (count of windows) > 0 then
-                    set musicBounds to bounds of front window
-                end if
-            end tell
+            set dh to do shell script "defaults read com.apple.dock autohide 2>/dev/null || echo 0"
+            if dh is "0" then
+                set ds to (do shell script "defaults read com.apple.dock tilesize 2>/dev/null || echo 48") as integer
+                set dockH to ds + 16
+            end if
         end try
 
-        -- Open URL in Safari and match bounds
+        set mb to 25
+        set safariBounds to {{0, mb, sw, sh - dockH}}
+
+        -- Open URL in Safari (reuse window, no start tab)
         tell application "Safari"
-            open location "{safe_url}"
+            if (count of windows) > 0 then
+                set URL of current tab of front window to "{safe_url}"
+            else
+                make new document with properties {{URL:"{safe_url}"}}
+            end if
             delay 0.5
             if (count of windows) > 0 then
-                set bounds of front window to musicBounds
+                set bounds of front window to safariBounds
             end if
             activate
         end tell
