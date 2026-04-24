@@ -40,6 +40,8 @@ class View(Enum):
     MODIFY_WORKING = "modify_working"
     MODIFY_DONE = "modify_done"
     MODIFY_UNMATCHED = "modify_unmatched"
+    MODIFY_DELETE_CONFIRM = "modify_delete_confirm"
+    SEARCH_FAILED = "search_failed"
 
     # Fix metadata
     FIXING_SCAN = "fixing_scan"

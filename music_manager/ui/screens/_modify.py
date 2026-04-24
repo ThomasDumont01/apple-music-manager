@@ -249,6 +249,10 @@ class ModifyMixin(_MixinBase):
             self._modify_show_album_covers()
         elif key == "album_metadata":
             self._modify_show_album_metadata()
+        elif key == "delete":
+            self._modify_show_delete_confirm()
+        elif key == "album_delete":
+            self._modify_show_delete_confirm()
 
     # ── Modify: editions ───────────────────────────────────────────────────
 
@@ -658,12 +662,19 @@ class ModifyMixin(_MixinBase):
         if not alb or not alb.tracks or not self._tracks_store:
             return
 
-        # Use first track as reference
+        # Use first track as reference, fallback to album data
         entry = self._tracks_store.all().get(alb.tracks[0].apple_id, {})
+        album_data: dict = {}
+        album_id = entry.get("album_id")
+        if album_id and self._albums_store:
+            album_data = self._albums_store.get(album_id) or {}
+        genre = entry.get("genre", "") or album_data.get("genre", "")
         year = entry.get("year", "") or (entry.get("release_date") or "")[:4]
+        if not year:
+            year = album_data.get("year", "")
         album_fields = [
             ("Artiste album", "album_artist", str(entry.get("album_artist", ""))),
-            ("Genre", "genre", str(entry.get("genre", ""))),
+            ("Genre", "genre", str(genre)),
             ("Année", "year", str(year)),
         ]
         self._modify_meta_fields = album_fields
@@ -922,6 +933,74 @@ class ModifyMixin(_MixinBase):
             # Conserver
             self._modify_unmatched = []
             self._on_modify_done(True)
+
+    # ── Modify: delete track / album ────────────────────────────────────
+
+    def _modify_show_delete_confirm(self) -> None:
+        """Show delete confirmation screen."""
+        from rich.text import Text as RichText  # noqa: PLC0415
+
+        from music_manager.ui.render import render_modify_actions  # noqa: PLC0415
+        from music_manager.ui.styles import WARN as _WARN  # noqa: PLC0415
+        from music_manager.ui.text import HELP_MODIFY_ACTIONS  # noqa: PLC0415
+
+        body = RichText()
+        if self._modify_selected_track:
+            trk = self._modify_selected_track
+            body.append(
+                f"\n  {_WARN}  Supprimer cette piste ?\n\n", style="yellow"
+            )
+            body.append(f"     {trk.title} — {trk.artist}\n\n", style="dim")
+        elif self._modify_selected_album:
+            alb = self._modify_selected_album
+            body.append(
+                f"\n  {_WARN}  Supprimer cet album ({alb.track_count} piste(s)) ?\n\n",
+                style="yellow",
+            )
+            body.append(f"     {alb.album_title} — {alb.artist}\n\n", style="dim")
+        else:
+            return
+
+        self._modify_cursor = 0
+        self._modify_actions_items = [
+            ("confirm_delete", "Supprimer"),
+            ("cancel_delete", "Annuler"),
+        ]
+        self._modify_actions_selectable = [0, 1]
+        self._view = "modify_delete_confirm"
+
+        actions_body = render_modify_actions(
+            self._modify_actions_items,
+            self._modify_cursor,
+            self._modify_actions_selectable,
+        )
+        body.append_text(actions_body)
+        self._set_body(body)
+        self._set_help(HELP_MODIFY_ACTIONS)
+
+    def _handle_delete_decision(self) -> None:
+        """Handle Supprimer/Annuler for delete confirmation."""
+        if self._modify_cursor == 0:
+            # Delete
+            from music_manager.services.apple import delete_tracks  # noqa: PLC0415
+
+            apple_ids: list[str] = []
+            if self._modify_selected_track:
+                apple_ids = [self._modify_selected_track.apple_id]
+            elif self._modify_selected_album:
+                apple_ids = [t.apple_id for t in self._modify_selected_album.tracks]
+
+            if apple_ids:
+                delete_tracks(apple_ids)
+                if self._tracks_store:
+                    for aid in apple_ids:
+                        self._tracks_store.remove(aid)
+                    self._tracks_store.save()
+            self._on_modify_done(True)
+        else:
+            # Cancel — back to actions
+            self._modify_cursor = 0
+            self._show_modify_actions()
 
     def _on_modify_done(self, success: bool, error: str = "") -> None:
         """Modify operation completed — show result."""
