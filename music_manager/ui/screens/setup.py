@@ -137,6 +137,9 @@ class SetupScreen(Screen):
         tracks.save()
 
         # Phase 4: Resolve ISRC → Deezer (auto-identify tracks with ISRC)
+        from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: PLC0415
+
+        from music_manager.core.models import Track  # noqa: PLC0415
         from music_manager.services.albums import Albums  # noqa: PLC0415
         from music_manager.services.resolver import resolve  # noqa: PLC0415
 
@@ -148,40 +151,50 @@ class SetupScreen(Screen):
 
         if with_isrc:
             total_isrc = len(with_isrc)
-            for idx, (apple_id, entry) in enumerate(with_isrc):
-                self.app.call_from_thread(
-                    self._render_progress,
-                    SETUP_RESOLVE_ISRC,
-                    idx + 1,
-                    total_isrc,
-                )
+
+            def _resolve_one(item: tuple[str, dict]) -> tuple[str, Track | None]:
+                apple_id, entry = item
                 isrc_val = entry.get("isrc") or ""
                 title = entry.get("title") or ""
                 artist = entry.get("artist") or ""
-                album = entry.get("album") or ""
-
-                resolution = resolve(title, artist, album, isrc_val, albums)
+                album_name = entry.get("album") or ""
+                resolution = resolve(title, artist, album_name, isrc_val, albums)
                 if resolution.status == "resolved" and resolution.track:
-                    trk = resolution.track
-                    tracks.update(
-                        apple_id,
-                        {
-                            "deezer_id": trk.deezer_id,
-                            "album_id": trk.album_id,
-                            "isrc": trk.isrc,
-                            "cover_url": trk.cover_url,
-                            "genre": trk.genre,
-                            "release_date": trk.release_date,
-                            "track_number": trk.track_number,
-                            "total_tracks": trk.total_tracks,
-                            "disk_number": trk.disk_number,
-                            "total_discs": trk.total_discs,
-                            "album_artist": trk.album_artist,
-                            "duration": trk.duration,
-                            "preview_url": trk.preview_url,
-                        },
+                    return (apple_id, resolution.track)
+                return (apple_id, None)
+
+            done = 0
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = {pool.submit(_resolve_one, item): item for item in with_isrc}
+                for future in as_completed(futures):
+                    done += 1
+                    self.app.call_from_thread(
+                        self._render_progress,
+                        SETUP_RESOLVE_ISRC,
+                        done,
+                        total_isrc,
                     )
-                    resolved_count += 1
+                    apple_id, trk = future.result()
+                    if trk is not None:
+                        tracks.update(
+                            apple_id,
+                            {
+                                "deezer_id": trk.deezer_id,
+                                "album_id": trk.album_id,
+                                "isrc": trk.isrc,
+                                "cover_url": trk.cover_url,
+                                "genre": trk.genre,
+                                "release_date": trk.release_date,
+                                "track_number": trk.track_number,
+                                "total_tracks": trk.total_tracks,
+                                "disk_number": trk.disk_number,
+                                "total_discs": trk.total_discs,
+                                "album_artist": trk.album_artist,
+                                "duration": trk.duration,
+                                "preview_url": trk.preview_url,
+                            },
+                        )
+                        resolved_count += 1
 
             tracks.save()
             albums.save()

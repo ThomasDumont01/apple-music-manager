@@ -130,29 +130,36 @@ class ChecksScreen(Screen):
             return
         self.app.call_from_thread(self._add_ok, CHECKS_APPLE_LABEL)
 
-        # APIs (non-blocking)
-        deezer_ok = check_deezer()
-        if deezer_ok:
-            self.app.call_from_thread(self._add_ok, CHECKS_DEEZER_LABEL)
-        else:
-            self.app.call_from_thread(self._add_warn, CHECKS_DEEZER_LABEL, "indisponible")
+        # APIs + update check in parallel
+        from concurrent.futures import Future, ThreadPoolExecutor  # noqa: PLC0415
 
-        youtube_ok = check_youtube()
-        if youtube_ok:
-            self.app.call_from_thread(self._add_ok, CHECKS_YOUTUBE_LABEL)
-        else:
-            self.app.call_from_thread(self._add_warn, CHECKS_YOUTUBE_LABEL, "indisponible")
-
-        itunes_ok = check_itunes()
-        if itunes_ok:
-            self.app.call_from_thread(self._add_ok, CHECKS_ITUNES_LABEL)
-        else:
-            self.app.call_from_thread(self._add_warn, CHECKS_ITUNES_LABEL, "indisponible")
-
-        # Update check (non-blocking, silent on failure)
         from music_manager.services.version import check_for_update  # noqa: PLC0415
 
-        has_update, latest, dmg_url = check_for_update()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            f_deezer: Future[bool] = pool.submit(check_deezer)
+            f_youtube: Future[bool] = pool.submit(check_youtube)
+            f_itunes: Future[bool] = pool.submit(check_itunes)
+            f_update: Future[tuple] = pool.submit(check_for_update)
+
+            deezer_ok = f_deezer.result()
+            if deezer_ok:
+                self.app.call_from_thread(self._add_ok, CHECKS_DEEZER_LABEL)
+            else:
+                self.app.call_from_thread(self._add_warn, CHECKS_DEEZER_LABEL, "indisponible")
+
+            youtube_ok = f_youtube.result()
+            if youtube_ok:
+                self.app.call_from_thread(self._add_ok, CHECKS_YOUTUBE_LABEL)
+            else:
+                self.app.call_from_thread(self._add_warn, CHECKS_YOUTUBE_LABEL, "indisponible")
+
+            itunes_ok = f_itunes.result()
+            if itunes_ok:
+                self.app.call_from_thread(self._add_ok, CHECKS_ITUNES_LABEL)
+            else:
+                self.app.call_from_thread(self._add_warn, CHECKS_ITUNES_LABEL, "indisponible")
+
+            has_update, latest, dmg_url = f_update.result()
 
         # Store results on app
         self.app.deezer_ok = deezer_ok  # type: ignore[attr-defined]
@@ -289,28 +296,35 @@ class ChecksScreen(Screen):
 
     def _run_remaining_checks(self) -> None:
         """Continue with Apple Music and API checks after brew install."""
+        from concurrent.futures import Future, ThreadPoolExecutor  # noqa: PLC0415
+
         if not check_apple_music():
             self.app.call_from_thread(self._on_apple_fail)
             return
         self.app.call_from_thread(self._add_ok, CHECKS_APPLE_LABEL)
 
-        deezer_ok = check_deezer()
-        if deezer_ok:
-            self.app.call_from_thread(self._add_ok, CHECKS_DEEZER_LABEL)
-        else:
-            self.app.call_from_thread(self._add_warn, CHECKS_DEEZER_LABEL, "indisponible")
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_deezer: Future[bool] = pool.submit(check_deezer)
+            f_youtube: Future[bool] = pool.submit(check_youtube)
+            f_itunes: Future[bool] = pool.submit(check_itunes)
 
-        youtube_ok = check_youtube()
-        if youtube_ok:
-            self.app.call_from_thread(self._add_ok, CHECKS_YOUTUBE_LABEL)
-        else:
-            self.app.call_from_thread(self._add_warn, CHECKS_YOUTUBE_LABEL, "indisponible")
+            deezer_ok = f_deezer.result()
+            if deezer_ok:
+                self.app.call_from_thread(self._add_ok, CHECKS_DEEZER_LABEL)
+            else:
+                self.app.call_from_thread(self._add_warn, CHECKS_DEEZER_LABEL, "indisponible")
 
-        itunes_ok = check_itunes()
-        if itunes_ok:
-            self.app.call_from_thread(self._add_ok, CHECKS_ITUNES_LABEL)
-        else:
-            self.app.call_from_thread(self._add_warn, CHECKS_ITUNES_LABEL, "indisponible")
+            youtube_ok = f_youtube.result()
+            if youtube_ok:
+                self.app.call_from_thread(self._add_ok, CHECKS_YOUTUBE_LABEL)
+            else:
+                self.app.call_from_thread(self._add_warn, CHECKS_YOUTUBE_LABEL, "indisponible")
+
+            itunes_ok = f_itunes.result()
+            if itunes_ok:
+                self.app.call_from_thread(self._add_ok, CHECKS_ITUNES_LABEL)
+            else:
+                self.app.call_from_thread(self._add_warn, CHECKS_ITUNES_LABEL, "indisponible")
 
         self.app.deezer_ok = deezer_ok  # type: ignore[attr-defined]
         self.app.youtube_ok = youtube_ok  # type: ignore[attr-defined]
