@@ -7,8 +7,7 @@ Music Manager                                502 pistes · 34 albums
 
   ─── Pistes ──────────────────────────────────────────────────────
 
-  ❯ Importer des pistes
-    requetes                                                  4/12
+  ❯ requetes                                                  4/12
     ma_playlist                                                  ✓
 
   ─── Playlists ───────────────────────────────────────────────────
