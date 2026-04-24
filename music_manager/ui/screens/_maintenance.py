@@ -59,6 +59,9 @@ class MaintenanceMixin(_MixinBase):
                 f"Supprimer {count} import(s) d'Apple Music ?",
             )
 
+        elif key == "move_data":
+            self._show_move_data_input()
+
         elif key == "delete_all":
             self._maintenance_pending = ("delete_all", 0)
             self._show_maintenance_confirm(
@@ -128,6 +131,44 @@ class MaintenanceMixin(_MixinBase):
                 delete_all(self._paths.root)
             log_event("maintenance_done", op=action)
             self.app.exit()
+
+    def _show_move_data_input(self) -> None:
+        """Open Finder folder picker and move data."""
+        import os  # noqa: PLC0415
+
+        from music_manager.core.logger import log_event  # noqa: PLC0415
+        from music_manager.core.setup import choose_data_root  # noqa: PLC0415
+
+        with self.app.suspend():
+            new_root = choose_data_root()
+
+        if not new_root or not self._paths:
+            self._show_maintenance_result("Déplacement annulé")
+            return
+
+        from music_manager.options.maintenance import move_data  # noqa: PLC0415
+
+        old_root = self._paths.root
+        ok = move_data(old_root, new_root)
+        if ok:
+            log_event("maintenance_done", op="move_data", new_root=new_root)
+            # Remove leftover .data/ recreated by log_event
+            import shutil  # noqa: PLC0415
+
+            leftover = os.path.join(old_root, ".data")
+            if os.path.isdir(leftover):
+                shutil.rmtree(leftover, ignore_errors=True)
+            self._restart_app()
+        else:
+            self._show_maintenance_result("Déplacement impossible (même dossier ?)")
+
+    def _restart_app(self) -> None:
+        """Exit and re-exec the app process."""
+        import os  # noqa: PLC0415
+        import sys  # noqa: PLC0415
+
+        self.app.exit()
+        os.execvp(sys.executable, [sys.executable, "-m", "music_manager"])
 
     def _show_maintenance_result(self, message: str) -> None:
         """Show maintenance result summary."""

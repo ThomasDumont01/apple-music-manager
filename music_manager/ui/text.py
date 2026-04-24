@@ -22,6 +22,7 @@ MAINTENANCE_ITEMS: list[tuple[str, str] | None] = [
     ("reset_failed", "Relancer les imports échoués"),
     ("clear_prefs", "Réinitialiser les préférences"),
     ("revert", "Annuler tous les imports"),
+    ("move_data", "Déplacer le dossier de données"),
     None,
     ("delete_all", "Supprimer toutes les données"),
     None,

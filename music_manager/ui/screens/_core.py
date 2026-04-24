@@ -597,7 +597,10 @@ class MenuScreenCore(_Base):
             self._start_modify()
         elif key == "identify":
             self._start_identify()
-        elif key in ("snapshot", "reset_failed", "clear_prefs", "revert", "delete_all"):
+        elif key in (
+            "snapshot", "reset_failed", "clear_prefs",
+            "revert", "delete_all", "move_data",
+        ):
             from music_manager.core.logger import log_event  # noqa: PLC0415
 
             log_event("maintenance_action", op=key)
