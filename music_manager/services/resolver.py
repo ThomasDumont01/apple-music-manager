@@ -470,6 +470,44 @@ def _search_and_match(
 # ── Album + Cover ──────────────────────────────────────────────────────────
 
 
+def _pick_best_cover(deezer_url: str, itunes_url: str) -> str:
+    """Compare Deezer and iTunes covers by real dimensions, return the best URL.
+
+    Prefers square covers. Among square (or among non-square), picks largest.
+    Falls back to iTunes if both fail or are equal.
+    """
+    if not deezer_url:
+        return itunes_url
+    if not itunes_url:
+        return deezer_url
+
+    dw, dh = get_remote_cover_dimensions(deezer_url)
+    iw, ih = get_remote_cover_dimensions(itunes_url)
+
+    # Both failed → default to iTunes (historically the preferred source)
+    if dw == 0 and iw == 0:
+        return itunes_url
+    # Single source failed → use the one with known-good dimensions
+    if dw == 0:
+        return itunes_url
+    if iw == 0:
+        return deezer_url
+
+    d_square = dw == dh
+    i_square = iw == ih
+
+    # One square, one not → prefer square
+    if i_square and not d_square:
+        return itunes_url
+    if d_square and not i_square:
+        return deezer_url
+
+    # Both same squareness → pick largest (by area)
+    if dw * dh > iw * ih:
+        return deezer_url
+    return itunes_url
+
+
 def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
     """Fetch album data from Deezer + best cover from iTunes. Cache in albums_store."""
     if not album_id:
@@ -483,6 +521,7 @@ def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
         return {}
 
     genres = album_data.get("genres", {}).get("data", [])
+    deezer_cover = album_data.get("cover_xl", "")
     result = {
         "id": album_id,
         "title": album_data.get("title", ""),
@@ -493,7 +532,7 @@ def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
         "release_date": album_data.get("release_date", ""),
         "total_tracks": album_data.get("nb_tracks", 0),
         "total_discs": album_data.get("nb_disk", 0),
-        "cover_url": album_data.get("cover_xl", ""),
+        "cover_url": deezer_cover,
     }
 
     try:
@@ -504,7 +543,7 @@ def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
             total_tracks=result["total_tracks"],
         )
         if itunes_cover:
-            result["cover_url"] = itunes_cover
+            result["cover_url"] = _pick_best_cover(deezer_cover, itunes_cover)
     except Exception as exc:  # noqa: BLE001
         from music_manager.core.logger import log_event  # noqa: PLC0415
 
@@ -846,6 +885,31 @@ def search_album_editions(
     return results
 
 
+def get_remote_cover_dimensions(cover_url: str) -> tuple[int, int]:
+    """Fetch first bytes from a cover URL to read image dimensions.
+
+    Uses Range header (4KB) with streaming — reads one chunk only.
+    Returns (width, height) or (0, 0) on failure.
+    """
+    from music_manager.services.tagger import parse_image_dimensions  # noqa: PLC0415
+
+    if not cover_url:
+        return (0, 0)
+    try:
+        response = _SESSION.get(
+            cover_url,
+            timeout=_REQUEST_TIMEOUT,
+            stream=True,
+            headers={**_HEADERS, "Range": "bytes=0-4095"},
+        )
+        response.raise_for_status()
+        chunk = next(response.iter_content(chunk_size=4096), b"")
+        response.close()
+        return parse_image_dimensions(chunk)
+    except (requests.ConnectionError, requests.Timeout, requests.HTTPError, OSError):
+        return (0, 0)
+
+
 def download_cover_file(cover_url: str, tmp_dir: str, name: str = "modify") -> str:
     """Download a cover image to tmp_dir. Returns file path or empty string."""
     if not cover_url:
@@ -891,12 +955,12 @@ def deezer_get(endpoint: str) -> dict | None:
         if endpoint in _API_CACHE:
             return _API_CACHE[endpoint]
 
-    # Circuit breaker: skip if too many recent failures
-    if _consecutive_failures >= _CIRCUIT_BREAKER_THRESHOLD:
-        if time.time() < _circuit_open_until:
-            return None
-        # Cooldown expired — try again
-        _consecutive_failures = 0
+        # Circuit breaker: skip if too many recent failures
+        if _consecutive_failures >= _CIRCUIT_BREAKER_THRESHOLD:
+            if time.time() < _circuit_open_until:
+                return None
+            # Cooldown expired — try again
+            _consecutive_failures = 0
 
     try:
         response = _SESSION.get(
@@ -906,21 +970,30 @@ def deezer_get(endpoint: str) -> dict | None:
         )
         time.sleep(_REQUEST_DELAY)
         if response.status_code != 200:
-            _consecutive_failures += 1
-            _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
+            with _CACHE_LOCK:
+                _consecutive_failures += 1
+                _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
             return None
         data = response.json()
         if "error" in data:
+            # Cache error to avoid re-fetching "not found" endpoints
+            with _CACHE_LOCK:
+                _consecutive_failures = 0
+                if len(_API_CACHE) >= _CACHE_MAX_SIZE:
+                    oldest = next(iter(_API_CACHE))
+                    del _API_CACHE[oldest]
+                _API_CACHE[endpoint] = None
             return None
         # Success — reset circuit breaker
-        _consecutive_failures = 0
         with _CACHE_LOCK:
+            _consecutive_failures = 0
             if len(_API_CACHE) >= _CACHE_MAX_SIZE:
                 oldest = next(iter(_API_CACHE))
                 del _API_CACHE[oldest]
             _API_CACHE[endpoint] = data
         return data
     except (requests.ConnectionError, requests.Timeout):
-        _consecutive_failures += 1
-        _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
+        with _CACHE_LOCK:
+            _consecutive_failures += 1
+            _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
         return None

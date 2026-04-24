@@ -13,10 +13,9 @@ from music_manager.services.tracks import Tracks
 def reset_failed(tracks_store: Tracks) -> int:
     """Reset all failed tracks to pending (status=None). Returns count reset."""
     count = 0
-    for entry in tracks_store.all().values():
+    for apple_id, entry in list(tracks_store.all().items()):
         if entry.get("status") == "failed":
-            entry["status"] = None
-            entry["fail_reason"] = ""
+            tracks_store.update(apple_id, {"status": None, "fail_reason": ""})
             count += 1
     if count > 0:
         tracks_store.save()

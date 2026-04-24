@@ -46,9 +46,9 @@ class Apple:
         return self._ready.is_set()
 
     def get_all(self) -> dict[str, LibraryEntry]:
-        """Return cached library. Waits for background scan if needed."""
+        """Return cached library (shallow copy). Waits for background scan if needed."""
         self.wait()
-        return self._cache
+        return dict(self._cache)
 
     def _background_scan(self) -> None:
         """Run scan and signal completion."""
@@ -440,7 +440,11 @@ def run_applescript(script: str) -> str | None:
 def _esc(value: str) -> str:
     """Escape a string for safe inclusion in AppleScript."""
     return (
-        value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\0", "")
     )
 
 

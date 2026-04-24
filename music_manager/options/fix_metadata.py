@@ -205,8 +205,17 @@ def find_all_divergences(
                     # Cover unreadable by mutagen — propose fix
                     needs_cover = True
                 elif cw < 1000 or ch < 1000 or cw != ch:
-                    needs_cover = True
-                    cover_local = f"{cw}x{ch}"
+                    # Only propose if a different cover URL exists AND is better
+                    stored_url = tracks.get(first_apple_id, {}).get("cover_url", "")
+                    if stored_url != album_group.cover_url:
+                        from music_manager.services.resolver import (  # noqa: PLC0415
+                            get_remote_cover_dimensions,
+                        )
+
+                        rw, rh = get_remote_cover_dimensions(album_group.cover_url)
+                        if rw > 0 and (rw * rh > cw * ch or (rw == rh and cw != ch)):
+                            needs_cover = True
+                            cover_local = f"{cw}x{ch}"
 
             if needs_cover:
                 refusal_key = f"{first_apple_id}:cover"
@@ -273,14 +282,19 @@ def apply_corrections(
                     apple_fields.update(apple_value)
             if apple_fields:
                 apple_batch[apple_id] = apple_fields
-                tracks_store.update(apple_id, fields)
+                # Convert int fields before storing (fields has str values from Divergence)
+                store_fields = {
+                    k: int(v) if k in _INT_FIELDS else v for k, v in fields.items()
+                }
+                tracks_store.update(apple_id, store_fields)
                 if apple_store:
                     lib = apple_store.get_all()
                     entry = lib.get(apple_id)
                     if entry:
                         for field_name, value in fields.items():
                             if hasattr(entry, field_name):
-                                setattr(entry, field_name, value)
+                                typed_val = int(value) if field_name in _INT_FIELDS else value
+                                setattr(entry, field_name, typed_val)
                 count += len(apple_fields)
         if apple_batch:
             update_tracks_batch(apple_batch)
@@ -431,12 +445,14 @@ def ignore_album(album_title: str, preferences_path: str) -> None:
     save_json(preferences_path, preferences)
 
 
+_INT_FIELDS = {"track_number", "total_tracks", "disk_number", "year"}
+
 # ── Private Functions ────────────────────────────────────────────────────────
 
 
 def _to_apple_value(field_name: str, value: str) -> dict:
     """Convert a field name + value to an Apple Music update dict."""
-    int_fields = {"track_number", "total_tracks", "disk_number", "year"}
+    int_fields = _INT_FIELDS
     if field_name in int_fields:
         try:
             return {field_name: int(value)}
@@ -454,10 +470,12 @@ def _apply_explicit_m4a(apple_id: str, file_path: str, is_explicit: bool) -> str
     audio = MP4(file_path)
     audio["rtng"] = [1 if is_explicit else 0]
     audio.save()
+    from music_manager.services.apple import _esc  # noqa: PLC0415
+
     run_applescript(
         'tell application "Music"\n'
         "    set t to first track of library playlist 1"
-        f' whose persistent ID is "{apple_id}"\n'
+        f' whose persistent ID is "{_esc(apple_id)}"\n'
         "    refresh t\n"
         "end tell"
     )
@@ -504,8 +522,8 @@ def _ffmpeg_convert(
     m4a["\xa9alb"] = [entry.get("album", "")]
     if entry.get("genre"):
         m4a["\xa9gen"] = [entry["genre"]]
-    if entry.get("year"):
-        m4a["\xa9day"] = [str(entry["year"])]
+    if entry.get("release_date"):
+        m4a["\xa9day"] = [entry["release_date"][:4]]
     if entry.get("album_artist"):
         m4a["aART"] = [entry["album_artist"]]
     track_num = entry.get("track_number")
@@ -514,7 +532,7 @@ def _ffmpeg_convert(
         m4a["trkn"] = [(int(track_num), int(total_tracks or 0))]
     disk_num = entry.get("disk_number")
     if disk_num:
-        m4a["disk"] = [(int(disk_num), 0)]
+        m4a["disk"] = [(int(disk_num), int(entry.get("total_discs") or 0))]
     isrc = entry.get("isrc", "")
     if isrc:
         m4a["----:com.apple.iTunes:ISRC"] = [isrc.encode("utf-8")]
@@ -549,9 +567,12 @@ def _import_converted(apple_id: str, tmp_m4a: str, tracks_store: Tracks) -> str:
     # Import new BEFORE deleting old (safety: if import fails, old track preserved)
     new_apple_id = import_file(tmp_m4a)
 
+    from music_manager.services.apple import _esc as esc_apple  # noqa: PLC0415
+
+    esc_id = esc_apple(new_apple_id)
     run_applescript(
         'tell application "Music"\n'
-        f'    set t to first track of library playlist 1 whose persistent ID is "{new_apple_id}"\n'
+        f'    set t to first track of library playlist 1 whose persistent ID is "{esc_id}"\n'
         "    refresh t\n"
         "end tell"
     )

@@ -63,6 +63,7 @@ SUMMARY_IMPORTED = "importée(s)"
 SUMMARY_EXISTING = "existante(s)"
 SUMMARY_FAILED = "passée(s)"
 SUMMARY_DELETED = "supprimée(s)"
+SUMMARY_IGNORED = "ignorée(s)"
 
 # ── Review labels ───────────────────────────────────────────────────────────
 
@@ -106,13 +107,14 @@ ACTION_LABELS: dict[str, str] = {
     "search_youtube": "Chercher sur Youtube",
     "retry": "Réessayer",
     "ignore_identify": "Ignorer définitivement",
+    "ignore": "Ignorer définitivement",
 }
 
 REVIEW_OPTIONS: dict[str, list[str]] = {
-    "not_found": ["skip", "search_deezer", "delete_csv"],
-    "mismatch": ["accept", "search_deezer", "skip", "delete_csv"],
-    "youtube_failed": ["retry", "search_youtube", "skip", "delete_csv"],
-    "duration_suspect": ["accept_audio", "search_youtube", "skip", "delete_csv"],
+    "not_found": ["skip", "search_deezer", "ignore", "delete_csv"],
+    "mismatch": ["accept", "search_deezer", "skip", "ignore", "delete_csv"],
+    "youtube_failed": ["retry", "search_youtube", "skip", "ignore", "delete_csv"],
+    "duration_suspect": ["accept_audio", "search_youtube", "skip", "ignore", "delete_csv"],
 }
 
 # ── Search input ───────────────────────────────────────────────────────────

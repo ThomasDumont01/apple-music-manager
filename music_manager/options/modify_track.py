@@ -180,6 +180,7 @@ def change_edition(
         delete_tracks([old_apple_id])
 
     cleanup_covers(paths.tmp_dir)
+    tracks_store.save()
 
     return ModifyResult(success=True)
 
@@ -272,11 +273,14 @@ def redownload_audio(
     tracks_store.add(new_apple_id, track.to_dict())
 
     # Delete old — only if new apple_id differs
+    # Remove from store FIRST so crash between steps doesn't leave zombie entry
     if new_apple_id != apple_id:
         if on_status:
             on_status("deleting_old")
-        delete_tracks([apple_id])
         tracks_store.remove(apple_id)
+        delete_tracks([apple_id])
+
+    tracks_store.save()
 
     # Cleanup
     import os  # noqa: PLC0415
@@ -556,6 +560,7 @@ def change_album_edition(
         imported += 1
 
     cleanup_covers(paths.tmp_dir)
+    tracks_store.save()
 
     if on_progress:
         on_progress(total, total, "")

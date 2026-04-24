@@ -95,6 +95,7 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
                 "after_move:filepath",
                 "--print",
                 "after_move:duration",
+                "--",
                 url,
             ],
             capture_output=True,

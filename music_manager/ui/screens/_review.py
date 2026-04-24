@@ -64,6 +64,8 @@ class ReviewMixin(_MixinBase):
         elif self._batch_cursor == 1:
             # Tout rejeter
             self._review_skipped = len(pending)
+            self._review_deleted = 0
+            self._review_ignored = 0
             self._pending = pending
             self._pending_idx = len(pending)
             self._finish_import()
@@ -78,6 +80,7 @@ class ReviewMixin(_MixinBase):
         self._to_delete = []
         self._review_skipped = 0
         self._review_deleted = 0
+        self._review_ignored = 0
 
         for p in pending:
             if p.reason == "ambiguous" and p.candidates:
@@ -99,6 +102,7 @@ class ReviewMixin(_MixinBase):
         self._review_cursor = 0
         self._review_skipped = 0
         self._review_deleted = 0
+        self._review_ignored = 0
         self._accepted = []
         self._to_delete = []
         self._render_review()
@@ -107,22 +111,14 @@ class ReviewMixin(_MixinBase):
         """Build the list of option keys for the current pending track."""
         if pending.reason == "ambiguous":
             opts = [f"candidate:{i}" for i in range(len(pending.candidates))]
-            opts.extend(["search_deezer", "skip"])
+            opts.extend(["search_deezer", "ignore", "skip"])
         else:
             opts = list(REVIEW_OPTIONS.get(pending.reason, ["skip"]))
-        # Identify mode: no CSV, add ignore option
+        # Identify mode: no CSV, replace ignore with ignore_identify
         if self._identify_apple_ids:
-            opts = [o for o in opts if o != "delete_csv"]
+            opts = [o for o in opts if o not in ("delete_csv", "ignore")]
             if "ignore_identify" not in opts:
                 opts.append("ignore_identify")
-        # Playlist mode: rows never removed, hide "Delete from CSV"
-        elif self._import_csv and self._playlists_dir:
-            import os  # noqa: PLC0415
-
-            if os.path.dirname(os.path.abspath(self._import_csv)) == os.path.abspath(
-                self._playlists_dir
-            ):
-                opts = [o for o in opts if o != "delete_csv"]
         return opts
 
     def _render_review(self) -> None:
@@ -157,6 +153,8 @@ class ReviewMixin(_MixinBase):
     def _review_move(self, direction: int) -> None:
         """Navigate action menu with wrap-around."""
         if not self._review_options:
+            return
+        if self._pending_idx >= len(self._pending):
             return
         self._review_cursor = (self._review_cursor + direction) % len(self._review_options)
         # Re-render without touching scroll (cursor move only)
@@ -224,6 +222,8 @@ class ReviewMixin(_MixinBase):
             )
             self._accepted.append((pending, "candidate", candidate))
             self._advance_review()
+        elif key == "ignore":
+            self._review_ignore(pending)
         elif key == "ignore_identify":
             from music_manager.core.logger import log_event  # noqa: PLC0415
 
@@ -372,6 +372,28 @@ class ReviewMixin(_MixinBase):
             p = self._pending[self._pending_idx]
             log_event("review_skip", title=p.csv_title, artist=p.csv_artist, reason=p.reason)
         self._review_skipped += 1
+        self._advance_review()
+
+    def _review_ignore(self, pending: PendingTrack) -> None:
+        """Ignore track permanently — save to preferences and advance."""
+        from music_manager.core.io import load_json, save_json  # noqa: PLC0415
+        from music_manager.core.logger import log_event  # noqa: PLC0415
+
+        if self._paths:
+            prefs_path = self._paths.preferences_path
+            prefs = load_json(prefs_path)
+            raw = prefs.get("ignored_tracks")
+            ignored: list = raw if isinstance(raw, list) else []
+
+            key = f"{pending.csv_title.lower()}::{pending.csv_artist.lower()}"
+            if key not in ignored:
+                ignored.append(key)
+                prefs["ignored_tracks"] = ignored
+                save_json(prefs_path, prefs)
+
+        log_event("review_ignore", title=pending.csv_title, artist=pending.csv_artist)
+        self._to_delete.append(pending)
+        self._review_ignored += 1
         self._advance_review()
 
     def _review_delete_csv(self) -> None:

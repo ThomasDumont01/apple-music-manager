@@ -100,8 +100,7 @@ def tag_audio_file(
         audio["disk"] = [(int(track.disk_number), int(track.total_discs or 0))]
     if track.isrc:
         audio["----:com.apple.iTunes:ISRC"] = [track.isrc.encode("utf-8")]
-    if track.explicit:
-        audio["rtng"] = [1]  # 1 = explicit (Apple Music), 2 = clean, 0 = none
+    audio["rtng"] = [1 if track.explicit else 0]  # 1 = explicit, 0 = none
 
     if cover_path:
         _embed_cover(audio, cover_path)
@@ -164,7 +163,7 @@ def get_cover_dimensions(filepath: str) -> tuple[int, int]:
         if not cover_data:
             return (0, 0)
 
-        return _parse_image_dimensions(cover_data)
+        return parse_image_dimensions(cover_data)
     except Exception as exc:
         from music_manager.core.logger import log_event  # noqa: PLC0415
 
@@ -233,10 +232,10 @@ def write_cover(filepath: str, cover_path: str) -> bool:
         return False
 
 
-# ── Private Functions ────────────────────────────────────────────────────────
+# ── Public helpers ──────────────────────────────────────────────────────────
 
 
-def _parse_image_dimensions(data: bytes) -> tuple[int, int]:
+def parse_image_dimensions(data: bytes) -> tuple[int, int]:
     """Extract width, height from JPEG or PNG raw bytes."""
     import struct  # noqa: PLC0415
 
@@ -263,6 +262,9 @@ def _parse_image_dimensions(data: bytes) -> tuple[int, int]:
             length = struct.unpack(">H", data[i + 2 : i + 4])[0]
             i += 2 + length
     return (0, 0)
+
+
+# ── Private Functions ────────────────────────────────────────────────────────
 
 
 def _extract_isrc(tags: mutagen.FileType) -> str:  # type: ignore[name-defined]

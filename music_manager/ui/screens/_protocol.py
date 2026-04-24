@@ -73,6 +73,7 @@ class MenuScreenProto(Protocol):
     _review_options: list[str]
     _review_skipped: int
     _review_deleted: int
+    _review_ignored: int
     _accepted: list[tuple[PendingTrack, str, Track | dict | None]]
     _to_delete: list[PendingTrack]
     _batch_cursor: int

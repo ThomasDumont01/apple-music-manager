@@ -8,9 +8,9 @@ from music_manager.services.tracks import Tracks
 def snapshot(tracks_store: Tracks) -> int:
     """Promote all imported+done tracks to baseline. Returns count promoted."""
     count = 0
-    for entry in tracks_store.all().values():
+    for apple_id, entry in list(tracks_store.all().items()):
         if entry.get("origin") == "imported" and entry.get("status") == "done":
-            entry["origin"] = "baseline"
+            tracks_store.update(apple_id, {"origin": "baseline"})
             count += 1
 
     if count > 0:

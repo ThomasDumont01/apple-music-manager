@@ -74,16 +74,14 @@ class ExportMixin(_MixinBase):
         )
 
     def _export_select(self) -> None:
-        """Enter on export: launch export."""
+        """Enter on export: toggle checkbox or execute action."""
         num = len(self._export_playlists)
         if self._export_cursor < num:
-            selected = [
-                self._export_playlists[i]
-                for i, checked in enumerate(self._export_checks)
-                if checked
+            # Toggle checkbox (same as Space)
+            self._export_checks[self._export_cursor] = not self._export_checks[
+                self._export_cursor
             ]
-            if selected:
-                self._run_export(selected)
+            self._refresh_export_body()
             return
         action_idx = self._export_cursor - num
         if action_idx == 0:

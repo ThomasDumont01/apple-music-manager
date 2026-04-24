@@ -4,6 +4,8 @@ Caches album data fetched from Deezer to avoid redundant API calls.
 Saves incrementally (after each put) since album data is expensive to fetch.
 """
 
+import threading
+
 from music_manager.core.io import load_json, save_json
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -14,6 +16,7 @@ class Albums:
 
     def __init__(self, path: str) -> None:
         self._path = path
+        self._lock = threading.RLock()
         self._data: dict[str, dict] = {
             k: v for k, v in load_json(path).items() if isinstance(v, dict)
         }
@@ -24,28 +27,28 @@ class Albums:
 
         Returns a shallow copy to prevent callers from mutating the cache.
         """
-        data = self._data.get(str(album_id))
-        return dict(data) if data is not None else None
+        with self._lock:
+            data = self._data.get(str(album_id))
+            return dict(data) if data is not None else None
 
     def put(self, album_id: int, data: dict) -> None:
-        """Cache album data in memory. Call save() to persist.
-
-        Not thread-safe — collect results and apply sequentially
-        in multi-threaded contexts.
-        """
-        self._data[str(album_id)] = data
-        self._dirty = True
+        """Cache album data in memory. Call save() to persist."""
+        with self._lock:
+            self._data[str(album_id)] = data
+            self._dirty = True
 
     def remove(self, album_id: int | str) -> None:
         """Remove an album from cache."""
-        if self._data.pop(str(album_id), None) is not None:
-            self._dirty = True
+        with self._lock:
+            if self._data.pop(str(album_id), None) is not None:
+                self._dirty = True
 
     def save(self) -> None:
         """Save cache to disk if modified."""
-        if self._dirty:
-            save_json(self._path, self._data)
-            self._dirty = False
+        with self._lock:
+            if self._dirty:
+                save_json(self._path, self._data)
+                self._dirty = False
 
     def all(self) -> dict[str, dict]:
         """Return all cached albums."""

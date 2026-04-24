@@ -166,11 +166,11 @@ def test_different_songs_not_duplicates(tmp_path: Path) -> None:
 # ── ISRC mismatch (different recordings) ──────────────────────────────────
 
 
-def test_different_isrc_same_title_not_duplicate(tmp_path: Path) -> None:
-    """Different ISRCs = different recordings, even if title matches.
+def test_different_isrc_same_csv_title_is_duplicate(tmp_path: Path) -> None:
+    """Different ISRCs but same csv_title = same CSV entry already processed.
 
-    Real case: "Dog Days Are Over" (GBUM70900209) vs
-    "Dog Days Are Over (Demo)" (GBUM70905782) — same title base, different ISRC.
+    Real case: Spotify ISRC differs from Deezer ISRC for the same track.
+    csv_title match proves the track was already imported from the same CSV entry.
     """
     store = Tracks(str(tmp_path / "tracks.json"))
     store.add(
@@ -186,7 +186,29 @@ def test_different_isrc_same_title_not_duplicate(tmp_path: Path) -> None:
         },
     )
 
-    # Different ISRC → NOT duplicate (different recording)
+    # Different ISRC but csv_title matches → already processed
+    assert (
+        is_duplicate("GBUM70900209", "Dog Days Are Over", "Florence + The Machine", store) is True
+    )
+
+
+def test_different_isrc_different_csv_title_not_duplicate(tmp_path: Path) -> None:
+    """Different ISRCs AND different csv_title = genuinely different recording."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    store.add(
+        "A1",
+        {
+            "title": "Dog Days Are Over (Demo)",
+            "artist": "Florence + The Machine",
+            "isrc": "GBUM70905782",
+            "status": "done",
+            "deezer_id": 1,
+            "csv_title": "Dog Days Are Over (Demo)",
+            "csv_artist": "Florence + The Machine",
+        },
+    )
+
+    # Different ISRC AND different csv_title → genuinely different
     assert (
         is_duplicate("GBUM70900209", "Dog Days Are Over", "Florence + The Machine", store) is False
     )

@@ -6,11 +6,13 @@ single JSON line in logs.jsonl. Used for debugging and traceability.
 
 import json
 import os
+import threading
 from datetime import datetime
 
 # ── Module state ─────────────────────────────────────────────────────────────
 
 _log_path: str = ""
+_log_lock = threading.Lock()
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -37,8 +39,9 @@ def log_event(action: str, **data: object) -> None:
         **data,
     }
     try:
-        os.makedirs(os.path.dirname(_log_path), exist_ok=True)
-        with open(_log_path, "a", encoding="utf-8") as file:
-            file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        with _log_lock:
+            os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+            with open(_log_path, "a", encoding="utf-8") as file:
+                file.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError:
         pass

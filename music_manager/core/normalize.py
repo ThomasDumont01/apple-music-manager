@@ -92,16 +92,23 @@ def normalize(text: str) -> str:
     """
     nfd = unicodedata.normalize("NFD", text)
     ascii_attempt = nfd.encode("ascii", "ignore").decode()
-    if ascii_attempt.strip() or not text.strip():
-        # Latin text or empty — strip accents as before
+    # Check if ASCII encoding lost non-Latin characters (mixed-script detection)
+    non_ascii_chars = sum(1 for c in nfd if ord(c) > 127 and not unicodedata.combining(c))
+    if not non_ascii_chars and (ascii_attempt.strip() or not text.strip()):
+        # Pure Latin text or empty — strip accents
         result = ascii_attempt.lower()
     else:
-        # Non-latin (CJK, Arabic, Cyrillic) — keep original chars lowercased
+        # Non-latin or mixed-script — keep original chars lowercased
         result = nfd.lower()
     result = result.replace("&", " and ")
     result = re.sub(
-        r"[^a-z0-9\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af "
-        r"\u0400-\u04ff\u0600-\u06ff]",
+        r"[^a-z0-9\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af"
+        r"\u0400-\u04ff\u0600-\u06ff"
+        r"\u0370-\u03ff"
+        r"\u0590-\u05ff"
+        r"\u0900-\u097f"
+        r"\u0e00-\u0e7f"
+        r" ]",
         " ",
         result,
     )

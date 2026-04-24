@@ -18,6 +18,7 @@ from music_manager.ui.text import (
     SUMMARY_DELETED,
     SUMMARY_EXISTING,
     SUMMARY_FAILED,
+    SUMMARY_IGNORED,
     SUMMARY_IMPORTED,
 )
 
@@ -190,8 +191,10 @@ def render_import_body(lines: list[Text]) -> Text:
     return body
 
 
-def render_summary_line(imported: int, skipped: int, pending: int, deleted: int = 0) -> Text:
-    """Summary: ✓  N importée(s) · N existante(s) · N passée(s) · N supprimée(s)."""
+def render_summary_line(
+    imported: int, skipped: int, pending: int, deleted: int = 0, ignored: int = 0
+) -> Text:
+    """Summary: ✓  N importée(s) · N existante(s) · N passée(s) · N supprimée(s) · N ignorée(s)."""
     txt = Text()
     parts = []
     if imported:
@@ -202,6 +205,8 @@ def render_summary_line(imported: int, skipped: int, pending: int, deleted: int 
         parts.append(f"{pending} {SUMMARY_FAILED}")
     if deleted:
         parts.append(f"{deleted} {SUMMARY_DELETED}")
+    if ignored:
+        parts.append(f"{ignored} {SUMMARY_IGNORED}")
 
     if parts:
         txt.append(f"  {CHECK}  ", style="green")
@@ -212,7 +217,12 @@ def render_summary_line(imported: int, skipped: int, pending: int, deleted: int 
 
 
 def render_final_summary(
-    lines: list[Text], imported: int, skipped: int, pending_left: int, deleted: int = 0
+    lines: list[Text],
+    imported: int,
+    skipped: int,
+    pending_left: int,
+    deleted: int = 0,
+    ignored: int = 0,
 ) -> Text:
     """Full summary: import lines + summary counts."""
     body = Text()
@@ -220,7 +230,7 @@ def render_final_summary(
         body.append_text(line)
         body.append("\n")
     body.append("\n")
-    body.append_text(render_summary_line(imported, skipped, pending_left, deleted))
+    body.append_text(render_summary_line(imported, skipped, pending_left, deleted, ignored))
     body.append("\n")
     return body
 

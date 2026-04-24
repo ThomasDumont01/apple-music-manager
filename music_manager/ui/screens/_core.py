@@ -131,6 +131,7 @@ class MenuScreenCore(_Base):
         self._review_options: list[str] = []
         self._review_skipped = 0
         self._review_deleted = 0
+        self._review_ignored = 0
         # Decisions collected during review, executed at the end
         # (pending, action_type, data)
         self._accepted: list[tuple[PendingTrack, str, Track | dict | None]] = []
@@ -352,7 +353,8 @@ class MenuScreenCore(_Base):
         self._identified_count = sum(
             1
             for e in all_tracks.values()
-            if e.get("deezer_id") or f"{e.get('title') or ''}::{e.get('artist') or ''}" in ignored
+            if e.get("deezer_id")
+            or f"{(e.get('title') or '').lower()}::{(e.get('artist') or '').lower()}" in ignored
         )
 
     def _refresh_menu(self) -> None:
@@ -598,8 +600,12 @@ class MenuScreenCore(_Base):
         elif key == "identify":
             self._start_identify()
         elif key in (
-            "snapshot", "reset_failed", "clear_prefs",
-            "revert", "delete_all", "move_data",
+            "snapshot",
+            "reset_failed",
+            "clear_prefs",
+            "revert",
+            "delete_all",
+            "move_data",
         ):
             from music_manager.core.logger import log_event  # noqa: PLC0415
 
@@ -617,13 +623,13 @@ class MenuScreenCore(_Base):
                     self._export_cursor
                 ]
                 self._refresh_export_body()
-        if self._view == "completing":
+        elif self._view == "completing":
             if self._complete_cursor < len(self._complete_albums):
                 self._complete_checks[self._complete_cursor] = not self._complete_checks[
                     self._complete_cursor
                 ]
                 self._refresh_complete_body()
-        if self._view == "fixing":
+        elif self._view == "fixing":
             if self._fix_cursor < len(self._fix_unique_indices):
                 self._fix_checks[self._fix_cursor] = not self._fix_checks[self._fix_cursor]
                 self._refresh_fix_body()

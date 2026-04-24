@@ -31,21 +31,24 @@ class Tracks:
 
     def get_by_apple_id(self, apple_id: str) -> dict | None:
         """O(1) lookup by apple_id (primary key)."""
-        return self._data.get(apple_id)
+        with self._lock:
+            return self._data.get(apple_id)
 
     def get_by_isrc(self, isrc: str) -> dict | None:
         """O(1) lookup by ISRC (secondary index, case-insensitive)."""
-        apple_id = self._by_isrc.get(isrc.upper())
-        if apple_id:
-            return self._data.get(apple_id)
-        return None
+        with self._lock:
+            apple_id = self._by_isrc.get(isrc.upper())
+            if apple_id:
+                return self._data.get(apple_id)
+            return None
 
     def get_by_title_artist(self, norm_title: str, norm_artist: str) -> dict | None:
         """O(1) lookup by normalized title+artist."""
-        apple_id = self._by_title_artist.get(f"{norm_title}:{norm_artist}")
-        if apple_id:
-            return self._data.get(apple_id)
-        return None
+        with self._lock:
+            apple_id = self._by_title_artist.get(f"{norm_title}:{norm_artist}")
+            if apple_id:
+                return self._data.get(apple_id)
+            return None
 
     def add(self, apple_id: str, entry: dict) -> None:
         """Add a new entry. Overwrites if apple_id already exists."""

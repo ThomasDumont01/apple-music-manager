@@ -666,7 +666,7 @@ class IdentifyMixin(_MixinBase):
         raw = prefs.get("ignored_tracks")
         ignored: list = raw if isinstance(raw, list) else []
 
-        key = f"{pending.csv_title}::{pending.csv_artist}"
+        key = f"{pending.csv_title.lower()}::{pending.csv_artist.lower()}"
         if key not in ignored:
             ignored.append(key)
             prefs["ignored_tracks"] = ignored

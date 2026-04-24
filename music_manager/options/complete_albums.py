@@ -85,7 +85,12 @@ def find_incomplete_albums(
             }
         )
 
-    incomplete.sort(key=lambda album: album.get("title", "").lower())
+    incomplete.sort(
+        key=lambda album: (
+            album.get("title", "")[0:1].isdigit(),
+            album.get("title", "").lower(),
+        )
+    )
     return incomplete
 
 
@@ -291,10 +296,12 @@ def _convert_mp3_to_m4a(
             playlists = get_playlist_membership(apple_id)
             new_apple_id = import_file(tmp_m4a)
 
+            from music_manager.services.apple import _esc  # noqa: PLC0415
+
             refresh_script = (
                 'tell application "Music"\n'
                 "    set t to first track of library playlist 1"
-                f' whose persistent ID is "{new_apple_id}"\n'
+                f' whose persistent ID is "{_esc(new_apple_id)}"\n'
                 "    refresh t\n"
                 "end tell"
             )

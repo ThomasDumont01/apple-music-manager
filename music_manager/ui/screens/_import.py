@@ -244,6 +244,7 @@ class ImportMixin(_MixinBase):
         skipped = result.skipped if result else 0
         pending_left = self._review_skipped
         deleted = self._review_deleted
+        ignored = self._review_ignored
 
         # Playlist: batch add tracks imported during review
         csv_name = os.path.splitext(os.path.basename(self._import_csv))[0]
@@ -270,7 +271,7 @@ class ImportMixin(_MixinBase):
             body.append_text(render_playlist_result(csv_name, pl_added, pl_already))
         else:
             body = render_final_summary(
-                self._import_lines, imported, skipped, pending_left, deleted
+                self._import_lines, imported, skipped, pending_left, deleted, ignored
             )
 
         # Clean CSV — remove rows now in library (after review imports)
@@ -288,24 +289,24 @@ class ImportMixin(_MixinBase):
             self._set_help(HELP_BACK, with_newline=False)
 
     def _clean_csv_after_review(self) -> None:
-        """Re-save CSV: remove rows imported/deleted during review. Skip playlists."""
+        """Re-save CSV: remove rows imported/deleted during review."""
         from music_manager.core.io import save_csv  # noqa: PLC0415
 
         csv_path = self._import_csv
         if not csv_path:
             return
 
+        # Playlists: CSV is the canonical playlist definition, never auto-remove rows
         is_playlist = os.path.dirname(os.path.abspath(csv_path)) == (
             os.path.abspath(self._playlists_dir)
         )
         if is_playlist:
             return
 
-        # Build set of resolved CSV keys (imported + deleted)
+        # Build set of resolved CSV keys (imported during review)
+        # _to_delete rows already removed by _execute_review_decisions
         resolved_keys: set[tuple[str, str]] = set()
         for pending, _, _ in self._accepted:
-            resolved_keys.add((pending.csv_title.lower(), pending.csv_artist.lower()))
-        for pending in self._to_delete:
             resolved_keys.add((pending.csv_title.lower(), pending.csv_artist.lower()))
 
         if not resolved_keys:

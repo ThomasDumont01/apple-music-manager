@@ -146,8 +146,8 @@ def test_two_entries_same_title_different_isrc_conflict(tmp_path: Path) -> None:
     assert is_duplicate("ISRC_C", "Song", "Art", store) is False
 
 
-def test_csv_title_match_blocked_by_isrc_conflict(tmp_path: Path) -> None:
-    """csv_title match is blocked when ISRCs differ."""
+def test_csv_title_match_bypasses_isrc_conflict(tmp_path: Path) -> None:
+    """csv_title match bypasses ISRC conflict — same CSV entry already processed."""
     store = Tracks(str(tmp_path / "tracks.json"))
     store.add(
         "A1",
@@ -156,6 +156,23 @@ def test_csv_title_match_blocked_by_isrc_conflict(tmp_path: Path) -> None:
             "artist": "Art",
             "csv_title": "My Song",
             "csv_artist": "Art",
+            "isrc": "ISRC_A",
+            "status": "done",
+            "deezer_id": 1,
+        },
+    )
+    # csv_title matches → already processed from same CSV source
+    assert is_duplicate("ISRC_B", "My Song", "Art", store) is True
+
+
+def test_no_csv_title_isrc_conflict_not_duplicate(tmp_path: Path) -> None:
+    """Without csv_title, ISRC conflict still blocks the match."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    store.add(
+        "A1",
+        {
+            "title": "My Song",
+            "artist": "Art",
             "isrc": "ISRC_A",
             "status": "done",
             "deezer_id": 1,

@@ -61,7 +61,7 @@ class Track(_BaseEntry):
     release_date: str = ""
     track_number: int | None = None
     total_tracks: int | None = None
-    disk_number: int = 1
+    disk_number: int = 0
     total_discs: int = 0
     album_artist: str = ""
 
@@ -105,7 +105,7 @@ class Album(_BaseEntry):
     genre: str = ""
     release_date: str = ""
     total_tracks: int = 0
-    total_discs: int = 1
+    total_discs: int = 0
 
     # Cover (iTunes 3000×3000 if available, Deezer fallback)
     cover_url: str = ""

@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from music_manager.core.config import Paths
-from music_manager.core.io import load_csv, save_csv
+from music_manager.core.io import load_csv, load_json, save_csv
 from music_manager.core.logger import log_event
 from music_manager.core.models import PendingTrack
 from music_manager.pipeline.dedup import is_duplicate
@@ -55,6 +55,13 @@ def process_csv(
     if not rows:
         return result
 
+    # ── Load ignored tracks ──────────────────────────────
+    ignored_tracks: set[str] = set()
+    prefs = load_json(paths.preferences_path)
+    raw = prefs.get("ignored_tracks", [])
+    if isinstance(raw, list):
+        ignored_tracks = set(raw)
+
     # ── Detect playlist mode ─────────────────────────────
     is_playlist = os.path.dirname(os.path.abspath(csv_path)) == os.path.abspath(
         paths.playlists_dir
@@ -74,6 +81,13 @@ def process_csv(
         album = row.get("album", "")
         isrc = (row.get("isrc", "") or "").upper()
 
+        # Ignored check
+        if f"{title.lower()}::{artist.lower()}" in ignored_tracks:
+            result.skipped += 1
+            if on_row:
+                on_row(idx, total, title, artist, "skipped")
+            continue
+
         # Dedup check
         if is_duplicate(isrc, title, artist, tracks_store):
             result.skipped += 1
@@ -84,6 +98,13 @@ def process_csv(
                 apple_id = find_apple_id(isrc, title, artist, tracks_store)
                 if apple_id:
                     playlist_ids.append(apple_id)
+                else:
+                    log_event(
+                        "playlist_missing_apple_id",
+                        title=title,
+                        artist=artist,
+                        reason="duplicate_but_no_apple_id",
+                    )
             continue
 
         # Check for failed status → remove and retry
@@ -137,7 +158,8 @@ def process_csv(
         result.playlist_added = add_to_playlist(playlist_name, playlist_ids)
         result.playlist_already = len(playlist_ids) - result.playlist_added
 
-    # ── Save album cache (batched, not per-track) ────────
+    # ── Save stores (batched, not per-track — crash safety) ────────
+    tracks_store.save()
     albums_store.save()
 
     # ── Cleanup cached covers ───────────────────────────
@@ -172,6 +194,8 @@ def find_apple_id(isrc: str, title: str, artist: str, tracks_store: Tracks) -> s
         prepare_title,
     )
 
+    isrc = (isrc or "").upper()
+
     # By ISRC
     if isrc:
         entry = tracks_store.get_by_isrc(isrc)
@@ -187,6 +211,14 @@ def find_apple_id(isrc: str, title: str, artist: str, tracks_store: Tracks) -> s
         entry_isrc = (entry.get("isrc", "") or "").upper()
         if not (isrc and entry_isrc and isrc != entry_isrc):
             return entry["apple_id"]
+        # ISRC conflict but same CSV origin → already processed
+        csv_t = entry.get("csv_title") or ""
+        if (
+            csv_t
+            and normalize(csv_t) == norm_title
+            and normalize(entry.get("csv_artist") or "") == norm_artist
+        ):
+            return entry["apple_id"]
 
     # Soft fallback: linear scan for csv_title and prepare_title
     prep_title = prepare_title(title)
@@ -196,7 +228,7 @@ def find_apple_id(isrc: str, title: str, artist: str, tracks_store: Tracks) -> s
         if not entry.get("apple_id"):
             continue
 
-        # Strict: csv_title + csv_artist
+        # Strict: csv_title + csv_artist (bypasses ISRC conflict — same CSV origin)
         csv_t = entry.get("csv_title", "")
         if (
             csv_t

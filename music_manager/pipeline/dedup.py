@@ -28,6 +28,8 @@ def is_duplicate(
     3. Soft fallback: prepare_title (strips parens) + first_artist
     """
 
+    isrc = (isrc or "").upper()
+
     def _is_valid(entry: dict) -> bool:
         return bool(entry.get("deezer_id")) and entry.get("status") != "failed"
 
@@ -48,6 +50,14 @@ def is_duplicate(
         entry_isrc = (entry.get("isrc", "") or "").upper()
         if not (isrc and entry_isrc and isrc != entry_isrc):
             return True
+        # ISRC conflict but same CSV origin → already processed from same source
+        csv_t = entry.get("csv_title") or ""
+        if (
+            csv_t
+            and normalize(csv_t) == norm_title
+            and normalize(entry.get("csv_artist") or "") == norm_artist
+        ):
+            return True
 
     # Level 2b + Level 3: need linear scan for soft matching
     prep_title = prepare_title(title)
@@ -58,8 +68,16 @@ def is_duplicate(
             continue
 
         # If both have ISRC and they differ → different recordings, skip soft checks
+        # Unless same CSV origin (same track imported from different source with different ISRC)
         entry_isrc = (entry.get("isrc", "") or "").upper()
         if isrc and entry_isrc and isrc != entry_isrc:
+            csv_t = entry.get("csv_title") or ""
+            if (
+                csv_t
+                and normalize(csv_t) == norm_title
+                and normalize(entry.get("csv_artist") or "") == norm_artist
+            ):
+                return True
             continue
 
         # Level 2b: strict normalize against stored CSV title
