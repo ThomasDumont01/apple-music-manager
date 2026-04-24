@@ -319,7 +319,11 @@ class MenuScreenCore(_Base):
         else:
             return
 
-        self._selectable = [i for i, item in enumerate(self._items) if item is not None]
+        self._selectable = [
+            i
+            for i, item in enumerate(self._items)
+            if item is not None and item[0] != "__sep__"
+        ]
         self.query_one("#menu-body", Static).display = True
         self._refresh_menu()
         self._set_help(HELP_MAIN if view == "main" else HELP_SUB)
@@ -373,14 +377,16 @@ class MenuScreenCore(_Base):
         if unidentified > 0:
             items.append(("identify", f"▶ Identifier la bibliothèque|{unidentified}|red"))
 
+        from music_manager.ui.text import SECTION_PISTES, SECTION_PLAYLISTS  # noqa: PLC0415
+
         data_csvs = self._scan_csvs(os.path.dirname(self._requests_path))
         if data_csvs:
-            items.append(None)
+            items.append(("__sep__", SECTION_PISTES))
             items.extend(data_csvs)
 
         playlist_csvs = self._scan_csvs(self._playlists_dir)
         if playlist_csvs:
-            items.append(None)
+            items.append(("__sep__", SECTION_PLAYLISTS))
             items.extend(playlist_csvs)
 
         # "Tout traiter" if more than 1 CSV
@@ -483,6 +489,9 @@ class MenuScreenCore(_Base):
         elif self._view == "modify_unmatched":
             self._modify_cursor = (self._modify_cursor + direction) % 2
             self._on_modify_done_with_unmatched(True, "", self._modify_unmatched)
+        elif self._view == "modify_delete_confirm":
+            self._modify_cursor = (self._modify_cursor + direction) % 2
+            self._modify_show_delete_confirm()
         elif self._view == "identify_album_pick":
             total = len(self._modify_editions) + 1  # +1 for skip
             self._modify_cursor = (self._modify_cursor + direction) % total
@@ -534,12 +543,18 @@ class MenuScreenCore(_Base):
         if self._view == "reviewing":
             self._review_select()
             return
+        if self._view == "search_failed":
+            self._render_review()
+            return
         if self._view == "search_input":
             return  # Input widget handles Enter via on_input_submitted
         if self._view == "modify_meta_edit":
             return  # Input widget handles Enter
         if self._view == "modify_unmatched":
             self._handle_unmatched_decision()
+            return
+        if self._view == "modify_delete_confirm":
+            self._handle_delete_decision()
             return
         if self._view == "identify_album_pick":
             self._identify_album_select()
@@ -737,6 +752,8 @@ class MenuScreenCore(_Base):
             self._hide_search_input()
             self._view = "reviewing"
             self._render_review()
+        elif self._view == "search_failed":
+            self._render_review()
         elif self._view == "reviewing":
             if self._identify_apple_ids:
                 # Identify mode: save accepted confirmations, then return
@@ -750,6 +767,10 @@ class MenuScreenCore(_Base):
             # Esc = keep (do not delete)
             self._modify_cursor = 0
             self._show_modify_actions()
+        elif self._view == "modify_delete_confirm":
+            # Esc = cancel delete
+            self._modify_cursor = 0
+            self._show_modify_actions()
         elif self._view in ("duplicates", "dup_removing"):
             self._switch_view("tools")
             return
@@ -759,8 +780,11 @@ class MenuScreenCore(_Base):
         elif self._view == "exporting":
             self._switch_view("tools")
             return
-        elif self._view in ("completing", "completing_progress"):
+        elif self._view == "completing":
             self._switch_view("tools")
+            return
+        elif self._view == "completing_progress":
+            self._cancel_requested = True
             return
         elif self._view == "modify_search":
             self._hide_modify_search()

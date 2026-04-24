@@ -12,8 +12,6 @@ from music_manager.ui.text import (
     ACTION_LABELS,
     REASON_LABELS,
     REVIEW_EDITION,
-    SECTION_PISTES,
-    SECTION_PLAYLISTS,
     STATUS_LABELS,
     SUMMARY_DELETED,
     SUMMARY_EXISTING,
@@ -96,26 +94,25 @@ def render_menu_options(
 ) -> Text:
     """Render a list of menu items with cursor, badges, sections."""
     body = Text()
-    section_idx = 0
-    section_labels = [SECTION_PISTES, SECTION_PLAYLISTS]
 
     for i, item in enumerate(items):
         if i > 0:
             body.append("\n")
 
         if item is None:
-            body.append("\n")
-            if view == "main" and section_idx < len(section_labels):
-                label = section_labels[section_idx]
-                section_idx += 1
-                sep_len = max(1, COL - cell_len(label) - 7)
-                body.append(f"  {SEP * 3} {label} {SEP * sep_len}", style="dim")
-            else:
-                body.append(f"  {SEP * 3}", style="dim")
+            body.append(f"\n  {SEP * 3}", style="dim")
             body.append("\n")
             continue
 
-        _key, raw = item
+        key, raw = item
+
+        # Named separator: ("__sep__", "Section Label")
+        if key == "__sep__":
+            sep_len = max(1, COL - cell_len(raw) - 7)
+            body.append(f"\n  {SEP * 3} {raw} {SEP * sep_len}", style="dim")
+            body.append("\n")
+            continue
+
         parts = raw.split("|")
         label = parts[0]
         badge = parts[1] if len(parts) > 1 else ""

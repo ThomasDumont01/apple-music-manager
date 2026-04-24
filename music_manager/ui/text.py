@@ -130,31 +130,29 @@ SEARCH_ERROR_INVALID = "Lien invalide."
 HELP_TEXT = f"""\
 [bold {BLUE}]Music Manager[/]
 
-Importe de la musique dans Apple Music avec
-pochettes HD et audio en qualité officielle.
+[dim]Importe de la musique dans Apple Music[/]
+[dim]pochettes HD · audio qualité officielle[/]
 
-[bold]Navigation[/]
-  ↑ ↓     Naviguer
-  ⏎       Valider
-  s       Passer une piste
-  p       Écouter un aperçu
-  esc     Retour
+[dim]─── [bold]Import[/] ─────────────────────────[/]
 
-[bold]Import[/]
-  Dépose un CSV ou un export Spotify (Exportify)
-  dans le dossier pistes ou playlists.
+  Dépose un CSV ou un export Spotify
+  (Exportify) dans le dossier de données.
 
-[bold]Outils[/]
-  Identifier — lier la bibliothèque à Deezer
-  Compléter — importer les pistes manquantes d'un album
-  Corriger — pochettes, genres, numéros de piste
-  Doublons — trouver et gérer les copies
-  Exporter — playlist en CSV
+[dim]─── [bold]Outils[/] ─────────────────────────[/]
 
-[bold]Maintenance[/]
-  Snapshot — valider les imports comme pistes existantes
-  Reset échecs — relancer les imports échoués
-  Annuler imports — supprimer tout ce qui a été importé"""
+  [{BLUE}]Identifier[/]  [dim]lier la bibliothèque à Deezer[/]
+  [{BLUE}]Compléter[/]   [dim]pistes manquantes d'un album[/]
+  [{BLUE}]Corriger[/]    [dim]pochettes, genres, numéros[/]
+  [{BLUE}]Modifier[/]    [dim]édition, pochette, métadonnées[/]
+  [{BLUE}]Doublons[/]    [dim]trouver et gérer les copies[/]
+  [{BLUE}]Exporter[/]    [dim]playlist en CSV[/]
+
+[dim]─── [bold]Maintenance[/] ────────────────────[/]
+
+  [{BLUE}]Snapshot[/]       [dim]valider comme pistes existantes[/]
+  [{BLUE}]Reset échecs[/]   [dim]relancer les imports échoués[/]
+  [{BLUE}]Annuler[/]        [dim]supprimer les imports[/]
+  [{BLUE}]Déplacer[/]       [dim]changer le dossier de données[/]"""
 
 # ── Checks screen ──────────────────────────────────────────────────────────
 
@@ -206,6 +204,7 @@ MODIFY_TRACK_ACTIONS: list[tuple[str, str] | None] = [
     ("replace_url", "Remplacer l'audio (URL YouTube)"),
     ("cover", "Changer la pochette"),
     ("metadata", "Modifier les métadonnées"),
+    ("delete", "Supprimer la piste"),
     None,
     ("back", "Retour"),
 ]
@@ -214,6 +213,7 @@ MODIFY_ALBUM_ACTIONS: list[tuple[str, str] | None] = [
     ("album_edition", "Changer d'édition de l'album"),
     ("album_cover", "Changer la pochette"),
     ("album_metadata", "Modifier les métadonnées"),
+    ("album_delete", "Supprimer l'album"),
     None,
     ("back", "Retour"),
 ]

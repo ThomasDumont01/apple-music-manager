@@ -13,6 +13,7 @@ from music_manager.ui.render import (
     render_review_body,
     render_review_header,
 )
+from music_manager.ui.text import HELP_BACK
 from music_manager.ui.text import (
     HELP_IMPORT,
     HELP_REVIEW,
@@ -652,8 +653,16 @@ class ReviewMixin(_MixinBase):
         self._advance_review()
 
     def _on_search_failed(self) -> None:
-        """Deezer/YouTube search failed — return to review options."""
-        self._render_review()
+        """Deezer/YouTube search failed — show error, Enter/Esc returns to review."""
+        from rich.text import Text as RichText  # noqa: PLC0415
+
+        from music_manager.ui.styles import WARN as _WARN  # noqa: PLC0415
+
+        body = RichText()
+        body.append(f"\n  {_WARN}  Aucun résultat trouvé.\n\n", style="yellow")
+        self._set_body(body)
+        self._set_help(HELP_BACK)
+        self._view = "search_failed"
 
     def _show_album_candidates(self, candidates: list[dict], album_data: dict) -> None:
         """Show album tracks as ambiguous candidates for user to choose."""

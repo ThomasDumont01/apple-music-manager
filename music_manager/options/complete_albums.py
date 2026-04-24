@@ -1,5 +1,6 @@
 """Complete albums — import missing tracks from identified albums (§8)."""
 
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -85,12 +86,14 @@ def find_incomplete_albums(
             }
         )
 
-    incomplete.sort(
-        key=lambda album: (
-            album.get("title", "")[0:1].isdigit(),
-            album.get("title", "").lower(),
-        )
-    )
+    def _sort_cmp(a: dict, b: dict) -> int:
+        ta, tb = a.get("title", ""), b.get("title", "")
+        da, db = ta[:1].isdigit(), tb[:1].isdigit()
+        if da != db:
+            return 1 if da else -1
+        return _apple_cmp(ta, tb)
+
+    incomplete.sort(key=functools.cmp_to_key(_sort_cmp))
     return incomplete
 
 
@@ -159,6 +162,28 @@ def complete_album(
 
 
 # ── Private Functions ────────────────────────────────────────────────────────
+
+_ARTICLE_PREFIXES = ("a ", "an ", "the ", "le ", "la ", "les ", "un ", "une ", "de ")
+
+
+def _strip_article(title: str) -> str:
+    """Strip leading article for sort (same behavior as Apple Music)."""
+    lower = title.lower()
+    for art in _ARTICLE_PREFIXES:
+        if lower.startswith(art):
+            return title[len(art):]
+    if lower.startswith("l\u2019") or lower.startswith("l'"):
+        return title[2:]
+    return title
+
+
+def _apple_cmp(a: str, b: str) -> int:
+    """Compare two strings using macOS localized sort + article stripping (Apple Music order)."""
+    from Foundation import NSString  # type: ignore[import-untyped]  # noqa: PLC0415
+
+    ns_a = NSString.alloc().initWithString_(_strip_article(a))
+    ns_b = NSString.alloc().initWithString_(_strip_article(b))
+    return ns_a.localizedStandardCompare_(ns_b)
 
 
 def _override_cover_from_refusals(
