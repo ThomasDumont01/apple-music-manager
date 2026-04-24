@@ -11,6 +11,8 @@ from mutagen.mp4 import MP4, MP4Cover
 
 from music_manager.services.tagger import get_cover_dimensions
 
+pytestmark = pytest.mark.integration
+
 
 def _make_jpeg(width: int, height: int) -> bytes:
     """Create minimal JPEG bytes with given dimensions."""
