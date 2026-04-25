@@ -99,6 +99,7 @@ def run_import_pipeline(
     if not tracks:
         return BatchResult()
 
+    pipeline_t0 = time.monotonic()
     total = len(tracks)
     cancel = threading.Event()
     result = BatchResult()
@@ -333,8 +334,14 @@ def run_import_pipeline(
                 # Apple Music import (sequential — OS limitation)
                 try:
                     apple_id = import_file(dr.audio_path)
-                except RuntimeError:
+                except RuntimeError as exc:
                     _cleanup_file(dr.audio_path)
+                    log_event(
+                        "apple_import_failed",
+                        title=dr.track.title,
+                        artist=dr.track.artist,
+                        error=str(exc)[:200],
+                    )
                     record_pending(make_pending(
                         dr.track, "apple_import_failed",
                         dr.csv_title, dr.csv_artist, dr.csv_album,
@@ -406,6 +413,15 @@ def run_import_pipeline(
 
     # Final save
     tracks_store.save()
+
+    pipeline_ms = int((time.monotonic() - pipeline_t0) * 1000)
+    log_event(
+        "pipeline_summary",
+        total=total,
+        imported=result.imported,
+        failed=len(result.pending),
+        duration_ms=pipeline_ms,
+    )
 
     return result
 

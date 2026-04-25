@@ -962,6 +962,7 @@ def deezer_get(endpoint: str) -> dict | None:
             # Cooldown expired — try again
             _consecutive_failures = 0
 
+    t0 = time.monotonic()
     try:
         response = _SESSION.get(
             f"{_DEEZER_BASE}{endpoint}",
@@ -969,10 +970,15 @@ def deezer_get(endpoint: str) -> dict | None:
             timeout=_REQUEST_TIMEOUT,
         )
         time.sleep(_REQUEST_DELAY)
+        duration_ms = int((time.monotonic() - t0) * 1000)
         if response.status_code != 200:
             with _CACHE_LOCK:
                 _consecutive_failures += 1
                 _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
+                fails = _consecutive_failures
+            _log_deezer(endpoint, duration_ms, response.status_code)
+            if fails == _CIRCUIT_BREAKER_THRESHOLD:
+                _log_circuit_breaker(fails)
             return None
         data = response.json()
         if "error" in data:
@@ -983,6 +989,7 @@ def deezer_get(endpoint: str) -> dict | None:
                     oldest = next(iter(_API_CACHE))
                     del _API_CACHE[oldest]
                 _API_CACHE[endpoint] = None
+            _log_deezer(endpoint, duration_ms, 200, error=True)
             return None
         # Success — reset circuit breaker
         with _CACHE_LOCK:
@@ -991,9 +998,45 @@ def deezer_get(endpoint: str) -> dict | None:
                 oldest = next(iter(_API_CACHE))
                 del _API_CACHE[oldest]
             _API_CACHE[endpoint] = data
+        _log_deezer(endpoint, duration_ms, 200)
         return data
-    except (requests.ConnectionError, requests.Timeout):
+    except (requests.ConnectionError, requests.Timeout) as exc:
+        duration_ms = int((time.monotonic() - t0) * 1000)
         with _CACHE_LOCK:
             _consecutive_failures += 1
             _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
+            fails = _consecutive_failures
+        _log_deezer(endpoint, duration_ms, 0, error=True, exc_type=type(exc).__name__)
+        if fails == _CIRCUIT_BREAKER_THRESHOLD:
+            _log_circuit_breaker(fails)
         return None
+
+
+def _log_deezer(
+    endpoint: str, duration_ms: int, status: int,
+    error: bool = False, exc_type: str = "",
+) -> None:
+    """Log a Deezer API request (sampled: only errors + slow requests)."""
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    # Log all errors + requests > 2s. Skip normal fast requests to avoid log bloat.
+    if error or exc_type or duration_ms > 2000:
+        log_event(
+            "deezer_request",
+            endpoint=endpoint,
+            status=status,
+            duration_ms=duration_ms,
+            error=error,
+            **({"exc_type": exc_type} if exc_type else {}),
+        )
+
+
+def _log_circuit_breaker(consecutive_failures: int) -> None:
+    """Log when circuit breaker opens."""
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    log_event(
+        "deezer_circuit_breaker",
+        consecutive_failures=consecutive_failures,
+        cooldown_seconds=_CIRCUIT_BREAKER_COOLDOWN,
+    )

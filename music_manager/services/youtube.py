@@ -85,10 +85,10 @@ def search_by_isrc(isrc: str) -> list[dict]:
             _record_success()
             return candidates
         # Still no results after retry — genuinely absent
-        log_event("youtube_search", isrc=isrc, results=0, retried=True)
+        log_event("youtube_search", isrc=isrc, results=0, retried=True, duration_ms=0)
         return []
 
-    log_event("youtube_search", isrc=isrc, results=0)
+    log_event("youtube_search", isrc=isrc, results=0, duration_ms=0)
     return []
 
 
@@ -99,6 +99,7 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
     """
     os.makedirs(output_dir, exist_ok=True)
     output_template = os.path.join(output_dir, "%(id)s.%(ext)s")
+    t0 = time.monotonic()
 
     try:
         result = subprocess.run(
@@ -128,21 +129,34 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
             check=False,
         )
     except subprocess.TimeoutExpired:
+        duration_ms = int((time.monotonic() - t0) * 1000)
         _cleanup_partial(output_dir)
+        log_event("youtube_download_failed", url=url, reason="timeout", duration_ms=duration_ms)
         raise RuntimeError(f"yt-dlp timeout after {_DOWNLOAD_TIMEOUT}s") from None
 
     if result.returncode != 0:
+        duration_ms = int((time.monotonic() - t0) * 1000)
         _cleanup_partial(output_dir)
-        raise RuntimeError(f"yt-dlp error: {result.stderr.strip()}") from None
+        stderr = result.stderr.strip()
+        log_event("youtube_download_failed", url=url, reason=stderr[:200], duration_ms=duration_ms)
+        raise RuntimeError(f"yt-dlp error: {stderr}") from None
 
     filepath, duration = _parse_output(result.stdout)
     if filepath and os.path.exists(filepath):
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        filesize = os.path.getsize(filepath)
+        log_event("youtube_download", url=url, duration_ms=duration_ms, filesize=filesize)
         return filepath, duration
 
     filepath = _find_latest_m4a(output_dir)
     if filepath:
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        filesize = os.path.getsize(filepath)
+        log_event("youtube_download", url=url, duration_ms=duration_ms, filesize=filesize)
         return filepath, duration
 
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    log_event("youtube_download_failed", url=url, reason="file_not_found", duration_ms=duration_ms)
     raise RuntimeError("Audio file not found after download")
 
 
@@ -151,6 +165,7 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
 
 def _do_search(isrc: str) -> list[dict]:
     """Execute a single yt-dlp search. Returns candidates list."""
+    t0 = time.monotonic()
     try:
         result = subprocess.run(
             [
@@ -167,6 +182,8 @@ def _do_search(isrc: str) -> list[dict]:
             check=False,
         )
     except subprocess.TimeoutExpired:
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        log_event("youtube_search", isrc=isrc, results=0, duration_ms=duration_ms, timeout=True)
         return []
 
     candidates = []
@@ -189,8 +206,9 @@ def _do_search(isrc: str) -> list[dict]:
         key=lambda candidate: 0 if "topic" in candidate["channel"].lower() else 1,
     )
 
+    duration_ms = int((time.monotonic() - t0) * 1000)
     if candidates:
-        log_event("youtube_search", isrc=isrc, results=len(candidates))
+        log_event("youtube_search", isrc=isrc, results=len(candidates), duration_ms=duration_ms)
     return candidates
 
 

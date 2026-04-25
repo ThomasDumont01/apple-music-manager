@@ -113,8 +113,11 @@ class MusicApp(App):
 
     def _auto_sync(self, apple: Apple, tracks: Tracks) -> None:
         """Sync store Tracks with Apple Music library + cleanup orphan albums."""
+        import time as _time  # noqa: PLC0415
+
         from music_manager.core.logger import log_event  # noqa: PLC0415
 
+        sync_t0 = _time.monotonic()
         library = apple.get_all()
         library_ids = set(library.keys())
         tracked_ids = set(tracks.all().keys())
@@ -145,8 +148,8 @@ class MusicApp(App):
 
         added = len(library_ids - tracked_ids)
         removed = len(tracked_ids - library_ids)
-        if added or removed:
-            log_event("auto_sync", added=added, removed=removed)
+        sync_ms = int((_time.monotonic() - sync_t0) * 1000)
+        log_event("auto_sync", added=added, removed=removed, duration_ms=sync_ms)
 
     def _cleanup_orphan_albums(self, tracks: Tracks) -> None:
         """Remove albums from cache if no track references them."""

@@ -121,6 +121,9 @@ class CompleteMixin(_MixinBase):
         if not (self._paths and self._tracks_store and self._albums_store):
             return
 
+        import time as _time  # noqa: PLC0415
+
+        batch_t0 = _time.monotonic()
         total_imported = 0
         total_failed = 0
 
@@ -149,6 +152,7 @@ class CompleteMixin(_MixinBase):
                         len(albums),
                     )
 
+                album_t0 = _time.monotonic()
                 try:
                     prefs_path = self._paths.preferences_path if self._paths else ""
                     result = complete_album(
@@ -162,11 +166,13 @@ class CompleteMixin(_MixinBase):
                     )
                     total_imported += result.tracks_imported
                     total_failed += len(result.pending)
+                    album_ms = int((_time.monotonic() - album_t0) * 1000)
                     log_event(
                         "complete_album",
                         album=album_title,
                         imported=result.tracks_imported,
                         failed=len(result.pending),
+                        duration_ms=album_ms,
                     )
                     self._save_all()
                 except Exception as exc:  # noqa: BLE001
@@ -176,7 +182,8 @@ class CompleteMixin(_MixinBase):
         finally:
             set_rate_limit_callback(None)
 
-        self.app.call_from_thread(self._complete_done, total_imported, total_failed)
+        batch_ms = int((_time.monotonic() - batch_t0) * 1000)
+        self.app.call_from_thread(self._complete_done, total_imported, total_failed, batch_ms)
 
     def _complete_render_progress(
         self,
@@ -223,7 +230,7 @@ class CompleteMixin(_MixinBase):
         )
         self._set_body(body)
 
-    def _complete_done(self, imported: int, failed: int) -> None:
+    def _complete_done(self, imported: int, failed: int, duration_ms: int = 0) -> None:
         """Show completion summary."""
         from music_manager.core.logger import log_event  # noqa: PLC0415
         from music_manager.ui.render import render_complete_summary  # noqa: PLC0415
@@ -234,6 +241,7 @@ class CompleteMixin(_MixinBase):
             imported=imported,
             failed=failed,
             total_tracks=len(self._tracks_store.all()) if self._tracks_store else 0,
+            duration_ms=duration_ms,
         )
         self._save_all()
         self._refresh_stats()

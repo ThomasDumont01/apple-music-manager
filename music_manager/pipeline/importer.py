@@ -95,8 +95,14 @@ def import_resolved_track(
     # ── Apple Music import ───────────────────────────────
     try:
         apple_id = import_file(dl_path)
-    except RuntimeError:
+    except RuntimeError as exc:
         _cleanup(dl_path)
+        log_event(
+            "apple_import_failed",
+            title=track.title,
+            artist=track.artist,
+            error=str(exc)[:200],
+        )
         return PendingTrack(
             reason="apple_import_failed",
             csv_title=label_title,

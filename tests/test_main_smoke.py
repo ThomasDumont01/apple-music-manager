@@ -6,7 +6,7 @@ Proves the app doesn't crash on first launch or subsequent launches.
 
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -176,7 +176,14 @@ def test_app_crash_logs_and_exits(
         with pytest.raises(SystemExit) as exc_info:
             main()
         assert "Erreur fatale" in str(exc_info.value)
-        mock_log.assert_called_once_with("crash", error="Segfault in Textual")
+        # session_start, crash, session_end all logged
+        crash_calls = [c for c in mock_log.call_args_list if c[0][0] == "crash"]
+        assert len(crash_calls) == 1
+        assert crash_calls[0] == call("crash", error="Segfault in Textual")
+        # session_end always logged in finally block
+        end_calls = [c for c in mock_log.call_args_list if c[0][0] == "session_end"]
+        assert len(end_calls) == 1
+        assert "duration_ms" in end_calls[0][1]
 
 
 # ── Exportify conversion ──────────────────────────────────────────────────
