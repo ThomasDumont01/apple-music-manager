@@ -8,7 +8,7 @@ from music_manager.core.config import Paths
 from music_manager.core.models import PendingTrack
 from music_manager.options.import_tracks import remove_failed
 from music_manager.pipeline.dedup import is_duplicate
-from music_manager.pipeline.importer import import_resolved_track
+from music_manager.pipeline.executor import run_import_pipeline
 from music_manager.services.albums import Albums
 from music_manager.services.resolver import (
     build_track,
@@ -135,28 +135,34 @@ def complete_album(
             continue
         missing.append(dz_track)
 
-    total = len(missing)
-    for idx, dz_track in enumerate(missing):
-        if should_cancel and should_cancel():
-            break
-        if on_progress:
-            on_progress(idx + 1, total)
+    if not missing:
+        return result
 
+    # Remove previously failed imports before pipeline
+    for dz_track in missing:
         isrc = dz_track.get("isrc", "")
         title = dz_track.get("title", "")
         artist = dz_track.get("artist", {}).get("name", "")
-
         remove_failed(isrc, title, artist, tracks_store)
 
-        track = build_track(dz_track, album_data or {})
-        pending = import_resolved_track(track, paths, tracks_store, albums_store)
+    # Build Track objects for the pipeline
+    tracks_for_pipeline = [
+        (build_track(dz, album_data or {}), "", "", "")
+        for dz in missing
+    ]
 
-        if pending:
-            result.pending.append(pending)
-        else:
-            result.tracks_imported += 1
-            # Incremental save — crash safety (track already in Apple Music)
-            tracks_store.save()
+    # Run parallel import pipeline
+    batch = run_import_pipeline(
+        tracks_for_pipeline,
+        paths,
+        tracks_store,
+        albums_store,
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+    )
+
+    result.tracks_imported = batch.imported
+    result.pending = batch.pending
 
     if result.tracks_imported > 0:
         result.albums_complete += 1

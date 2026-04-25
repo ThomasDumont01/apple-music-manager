@@ -1,11 +1,12 @@
 """Tests for options/complete_albums.py — album completion logic."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from music_manager.core.config import Paths
 from music_manager.core.models import PendingTrack
 from music_manager.options.complete_albums import complete_album, find_incomplete_albums
+from music_manager.pipeline.executor import BatchResult
 from music_manager.services.albums import Albums
 from music_manager.services.tracks import Tracks
 
@@ -199,10 +200,10 @@ def test_find_incomplete_multiple_albums(mock_fetch, mock_tl, tmp_path: Path) ->
         ],
         [
             {"id": 20, "title": "T2", "isrc": "I2", "artist": {"name": "Art"}},
-            {"id": 30, "title": "T3", "isrc": "I3", "artist": {"name": "Art"}},
             {"id": 21, "title": "T2b", "isrc": "I2b", "artist": {"name": "Art"}},
             {"id": 22, "title": "T2c", "isrc": "I2c", "artist": {"name": "Art"}},
             {"id": 23, "title": "T2d", "isrc": "I2d", "artist": {"name": "Art"}},
+            {"id": 24, "title": "T2e", "isrc": "I2e", "artist": {"name": "Art"}},
         ],
     ]
 
@@ -213,10 +214,12 @@ def test_find_incomplete_multiple_albums(mock_fetch, mock_tl, tmp_path: Path) ->
 # ── complete_album ───────────────────────────────────────────────────────
 
 
-@patch(f"{_PATCH}.import_resolved_track", return_value=None)
+@patch(f"{_PATCH}.run_import_pipeline")
 @patch(f"{_PATCH}.fetch_album_with_cover")
 @patch(f"{_PATCH}.get_album_tracklist")
-def test_complete_imports_missing_tracks(mock_tl, mock_album, mock_import, tmp_path: Path) -> None:
+def test_complete_imports_missing_tracks(
+    mock_tl, mock_album, mock_pipeline, tmp_path: Path,
+) -> None:
     """Only missing tracks are imported — existing ones skipped via dedup."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
     tracks.add("A1", {"title": "Track 1", "isrc": "ISRC1", "deezer_id": 10, "status": "done"})
@@ -226,17 +229,21 @@ def test_complete_imports_missing_tracks(mock_tl, mock_album, mock_import, tmp_p
 
     mock_tl.return_value = _TRACKLIST
     mock_album.return_value = _ALBUM_DATA
+    mock_pipeline.return_value = BatchResult(imported=2)
 
     result = complete_album(1, paths, tracks, albums)
 
-    assert result.tracks_imported == 2  # Track 2 + Track 3 imported
-    assert mock_import.call_count == 2
+    assert result.tracks_imported == 2
+    # Pipeline called with 2 tracks (Track 2 + Track 3, Track 1 is duplicate)
+    assert mock_pipeline.call_count == 1
+    call_tracks = mock_pipeline.call_args[0][0]
+    assert len(call_tracks) == 2
 
 
-@patch(f"{_PATCH}.import_resolved_track")
+@patch(f"{_PATCH}.run_import_pipeline")
 @patch(f"{_PATCH}.fetch_album_with_cover")
 @patch(f"{_PATCH}.get_album_tracklist")
-def test_complete_pending_on_failure(mock_tl, mock_album, mock_import, tmp_path: Path) -> None:
+def test_complete_pending_on_failure(mock_tl, mock_album, mock_pipeline, tmp_path: Path) -> None:
     """Failed imports produce PendingTrack entries."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
     albums = Albums(str(tmp_path / "albums.json"))
@@ -244,7 +251,10 @@ def test_complete_pending_on_failure(mock_tl, mock_album, mock_import, tmp_path:
 
     mock_tl.return_value = [_TRACKLIST[0]]
     mock_album.return_value = _ALBUM_DATA
-    mock_import.return_value = PendingTrack(reason="youtube_failed")
+    mock_pipeline.return_value = BatchResult(
+        imported=0,
+        pending=[PendingTrack(reason="youtube_failed")],
+    )
 
     result = complete_album(1, paths, tracks, albums)
 
@@ -253,16 +263,16 @@ def test_complete_pending_on_failure(mock_tl, mock_album, mock_import, tmp_path:
     assert result.pending[0].reason == "youtube_failed"
 
 
-@patch(f"{_PATCH}.import_resolved_track", return_value=None)
+@patch(f"{_PATCH}.run_import_pipeline")
 @patch(f"{_PATCH}.fetch_album_with_cover")
 @patch(f"{_PATCH}.get_album_tracklist")
 def test_complete_all_duplicates_no_import(
     mock_tl,
     mock_album,
-    mock_import,
+    mock_pipeline,
     tmp_path: Path,
 ) -> None:
-    """All tracks already exist → no imports."""
+    """All tracks already exist → no imports, pipeline not called."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
     tracks.add("A1", {"title": "Track 1", "isrc": "ISRC1", "deezer_id": 10, "status": "done"})
     tracks.add("A2", {"title": "Track 2", "isrc": "ISRC2", "deezer_id": 20, "status": "done"})
@@ -277,7 +287,7 @@ def test_complete_all_duplicates_no_import(
     result = complete_album(1, paths, tracks, albums)
 
     assert result.tracks_imported == 0
-    mock_import.assert_not_called()
+    mock_pipeline.assert_not_called()
 
 
 @patch(f"{_PATCH}.fetch_album_with_cover")
@@ -311,33 +321,31 @@ def test_complete_album_data_none(mock_tl, mock_album, tmp_path: Path) -> None:
     assert result.tracks_imported == 0
 
 
-@patch(f"{_PATCH}.import_resolved_track", return_value=None)
+@patch(f"{_PATCH}.run_import_pipeline")
 @patch(f"{_PATCH}.fetch_album_with_cover")
 @patch(f"{_PATCH}.get_album_tracklist")
-def test_complete_progress_callback(mock_tl, mock_album, mock_import, tmp_path: Path) -> None:
-    """Progress callback called for each track."""
+def test_complete_progress_callback(mock_tl, mock_album, mock_pipeline, tmp_path: Path) -> None:
+    """Progress callback is forwarded to pipeline."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
     albums = Albums(str(tmp_path / "albums.json"))
     paths = Paths(str(tmp_path / "data"))
 
     mock_tl.return_value = _TRACKLIST
     mock_album.return_value = _ALBUM_DATA
+    mock_pipeline.return_value = BatchResult(imported=3)
     progress = MagicMock()
 
     result = complete_album(1, paths, tracks, albums, on_progress=progress)
 
     assert result.tracks_imported == 3
-    # Filter out __bool__ calls from the mock
-    real_calls = [c for c in progress.call_args_list]
-    assert len(real_calls) == 3
-    assert real_calls[0] == call(1, 3)
-    assert real_calls[2] == call(3, 3)
+    # Progress callback passed to pipeline
+    assert mock_pipeline.call_args[1]["on_progress"] is progress
 
 
-@patch(f"{_PATCH}.import_resolved_track", return_value=None)
+@patch(f"{_PATCH}.run_import_pipeline")
 @patch(f"{_PATCH}.fetch_album_with_cover")
 @patch(f"{_PATCH}.get_album_tracklist")
-def test_complete_mixed_results(mock_tl, mock_album, mock_import, tmp_path: Path) -> None:
+def test_complete_mixed_results(mock_tl, mock_album, mock_pipeline, tmp_path: Path) -> None:
     """Mix of success and failure."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
     albums = Albums(str(tmp_path / "albums.json"))
@@ -345,8 +353,10 @@ def test_complete_mixed_results(mock_tl, mock_album, mock_import, tmp_path: Path
 
     mock_tl.return_value = _TRACKLIST
     mock_album.return_value = _ALBUM_DATA
-    # Track 1 OK, Track 2 fails, Track 3 OK
-    mock_import.side_effect = [None, PendingTrack(reason="youtube_failed"), None]
+    mock_pipeline.return_value = BatchResult(
+        imported=2,
+        pending=[PendingTrack(reason="youtube_failed")],
+    )
 
     result = complete_album(1, paths, tracks, albums)
 
