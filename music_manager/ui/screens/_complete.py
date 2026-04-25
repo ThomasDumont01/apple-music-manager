@@ -113,6 +113,10 @@ class CompleteMixin(_MixinBase):
         """Complete selected albums in background."""
         from music_manager.core.logger import log_event  # noqa: PLC0415
         from music_manager.options.complete_albums import complete_album  # noqa: PLC0415
+        from music_manager.services.youtube import (  # noqa: PLC0415
+            reset_throttle,
+            set_rate_limit_callback,
+        )
 
         if not (self._paths and self._tracks_store and self._albums_store):
             return
@@ -121,47 +125,56 @@ class CompleteMixin(_MixinBase):
         total_failed = 0
 
         self._cancel_requested = False
+        reset_throttle()
 
-        for album_idx, album in enumerate(albums):
-            if self._cancel_requested:
-                break
-            album_id = album["album_id"]
-            album_title = album.get("title", "")
+        def _on_rate_limit(seconds: int) -> None:
+            self.app.call_from_thread(self._complete_render_rate_limit, seconds)
 
-            def on_progress(current: int, total: int) -> None:
-                self.app.call_from_thread(
-                    self._complete_render_progress,
-                    album_title,
-                    current,
-                    total,
-                    album_idx + 1,
-                    len(albums),
-                )
+        set_rate_limit_callback(_on_rate_limit)
 
-            try:
-                prefs_path = self._paths.preferences_path if self._paths else ""
-                result = complete_album(
-                    album_id,
-                    self._paths,
-                    self._tracks_store,
-                    self._albums_store,
-                    on_progress=on_progress,
-                    preferences_path=prefs_path,
-                    should_cancel=lambda: self._cancel_requested,
-                )
-                total_imported += result.tracks_imported
-                total_failed += len(result.pending)
-                log_event(
-                    "complete_album",
-                    album=album_title,
-                    imported=result.tracks_imported,
-                    failed=len(result.pending),
-                )
-                self._save_all()
-            except Exception as exc:  # noqa: BLE001
-                from music_manager.core.logger import log_event as log_err  # noqa: PLC0415
+        try:
+            for album_idx, album in enumerate(albums):
+                if self._cancel_requested:
+                    break
+                album_id = album["album_id"]
+                album_title = album.get("title", "")
 
-                log_err("worker_error", error=str(exc))
+                def on_progress(current: int, total: int) -> None:
+                    self.app.call_from_thread(
+                        self._complete_render_progress,
+                        album_title,
+                        current,
+                        total,
+                        album_idx + 1,
+                        len(albums),
+                    )
+
+                try:
+                    prefs_path = self._paths.preferences_path if self._paths else ""
+                    result = complete_album(
+                        album_id,
+                        self._paths,
+                        self._tracks_store,
+                        self._albums_store,
+                        on_progress=on_progress,
+                        preferences_path=prefs_path,
+                        should_cancel=lambda: self._cancel_requested,
+                    )
+                    total_imported += result.tracks_imported
+                    total_failed += len(result.pending)
+                    log_event(
+                        "complete_album",
+                        album=album_title,
+                        imported=result.tracks_imported,
+                        failed=len(result.pending),
+                    )
+                    self._save_all()
+                except Exception as exc:  # noqa: BLE001
+                    from music_manager.core.logger import log_event as log_err  # noqa: PLC0415
+
+                    log_err("worker_error", error=str(exc))
+        finally:
+            set_rate_limit_callback(None)
 
         self.app.call_from_thread(self._complete_done, total_imported, total_failed)
 
@@ -196,6 +209,19 @@ class CompleteMixin(_MixinBase):
         body.append(f"  {current}/{total}", style="dim")
         self._set_body(body)
         self._set_help("")
+
+    def _complete_render_rate_limit(self, seconds: int) -> None:
+        """Show rate limit warning below progress bar."""
+        from rich.text import Text as RichText  # noqa: PLC0415
+
+        from music_manager.ui.text import RATE_LIMIT_WAIT  # noqa: PLC0415
+
+        body = RichText()
+        body.append(
+            f"\n  ⏳ {RATE_LIMIT_WAIT.format(seconds=seconds)}",
+            style="bold yellow",
+        )
+        self._set_body(body)
 
     def _complete_done(self, imported: int, failed: int) -> None:
         """Show completion summary."""

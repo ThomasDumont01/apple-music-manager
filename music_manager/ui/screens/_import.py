@@ -179,10 +179,21 @@ class ImportMixin(_MixinBase):
     def _run_import(self, csv_path: str) -> None:
         """Run import in background thread."""
         from music_manager.options.import_tracks import process_csv  # noqa: PLC0415
+        from music_manager.services.youtube import (  # noqa: PLC0415
+            reset_throttle,
+            set_rate_limit_callback,
+        )
 
         if not (self._paths and self._tracks_store and self._albums_store):
             self.app.call_from_thread(self._on_import_done, ImportResult())
             return
+
+        reset_throttle()
+
+        def _on_rate_limit(seconds: int) -> None:
+            self.app.call_from_thread(self._on_import_rate_limit, seconds)
+
+        set_rate_limit_callback(_on_rate_limit)
 
         try:
             paths = self._paths
@@ -205,6 +216,8 @@ class ImportMixin(_MixinBase):
 
             log_event("import_error", error=str(exc))
             result = ImportResult()
+        finally:
+            set_rate_limit_callback(None)
         self.app.call_from_thread(self._on_import_done, result)
 
     def _on_import_row(self, idx: int, total: int, title: str, artist: str, status: str) -> None:
@@ -216,6 +229,13 @@ class ImportMixin(_MixinBase):
             self.query_one("#menu-scroll", ScrollableContainer).scroll_end(animate=False)
         except Exception:  # noqa: BLE001
             pass
+
+    def _on_import_rate_limit(self, seconds: int) -> None:
+        """Show rate limit warning in import progress."""
+        from music_manager.ui.text import RATE_LIMIT_WAIT  # noqa: PLC0415
+
+        self._import_lines.append(f"  ⏳ {RATE_LIMIT_WAIT.format(seconds=seconds)}")
+        self._set_body(render_import_body(self._import_lines))
 
     def _on_import_done(self, result) -> None:
         """Import finished — show summary, then review if pending."""

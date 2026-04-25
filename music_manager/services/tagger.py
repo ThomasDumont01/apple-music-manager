@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
     from music_manager.core.models import Track
 
+import os
 from collections.abc import Callable
 
 import mutagen  # type: ignore[import-untyped]
@@ -140,8 +141,10 @@ def strip_youtube_tags(filepath: str) -> None:
 def get_cover_dimensions(filepath: str) -> tuple[int, int]:
     """Read cover dimensions from audio file (M4A or MP3).
 
-    Returns (width, height) or (0, 0) if no cover or error.
+    Returns (width, height) or (0, 0) if no cover, missing file, or error.
     """
+    if not filepath or not os.path.isfile(filepath):
+        return (0, 0)
     try:
         audio = mutagen.File(filepath)  # type: ignore[attr-defined]
         if audio is None:
@@ -173,6 +176,8 @@ def get_cover_dimensions(filepath: str) -> tuple[int, int]:
 
 def write_isrc(filepath: str, isrc: str) -> bool:
     """Write ISRC tag to an audio file. Returns True if successful."""
+    if not filepath or not os.path.isfile(filepath):
+        return False
     try:
         tags = mutagen.File(filepath)  # type: ignore[attr-defined]
         if tags is None:
@@ -200,6 +205,8 @@ def write_isrc(filepath: str, isrc: str) -> bool:
 
 def write_cover(filepath: str, cover_path: str) -> bool:
     """Embed a cover image into an audio file (M4A or MP3). Returns True if successful."""
+    if not filepath or not os.path.isfile(filepath):
+        return False
     try:
         if filepath.endswith(".m4a"):
             from mutagen.mp4 import MP4  # noqa: PLC0415

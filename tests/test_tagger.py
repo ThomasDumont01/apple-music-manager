@@ -6,6 +6,8 @@ from __future__ import annotations
 import struct
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
+
 from music_manager.core.models import Track
 from music_manager.services.tagger import (
     get_cover_dimensions,
@@ -206,6 +208,11 @@ class TestTagAudioFile:
 class TestWriteIsrc:
     """Tests for write_isrc()."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_isfile(self):
+        with patch("music_manager.services.tagger.os.path.isfile", return_value=True):
+            yield
+
     @patch("mutagen.File")
     def test_m4a_writes_correct_tag(self, mock_file: MagicMock) -> None:
         """M4A files get ISRC written as ----:com.apple.iTunes:ISRC."""
@@ -276,6 +283,11 @@ class TestWriteIsrc:
 
 class TestWriteCover:
     """Tests for write_cover()."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_isfile(self):
+        with patch("music_manager.services.tagger.os.path.isfile", return_value=True):
+            yield
 
     @patch("music_manager.services.tagger._embed_cover")
     @patch("mutagen.mp4.MP4")
@@ -432,6 +444,11 @@ class TestStripYoutubeTags:
 
 class TestGetCoverDimensions:
     """Tests for get_cover_dimensions() with mocked mutagen."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_isfile(self):
+        with patch("music_manager.services.tagger.os.path.isfile", return_value=True):
+            yield
 
     @patch("mutagen.File")
     def test_m4a_cover_dimensions(self, mock_file: MagicMock) -> None:

@@ -28,5 +28,6 @@ htmlcov/
 
 # Private (dev tooling, not for public repo)
 CLAUDE.md
+CLAUDE.original.md
 notes.txt
 .python-version

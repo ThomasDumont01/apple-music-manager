@@ -267,6 +267,7 @@ COMPLETE_BACK = "Retour"
 
 HELP_COMPLETE = "↑↓  naviguer    espace  cocher/décocher    ⏎  compléter"
 HELP_COMPLETE_PROGRESS = "  complétion en cours..."
+RATE_LIMIT_WAIT = "Limite YouTube atteinte — nouvel essai dans {seconds}s…"
 
 # ── Identify labels ────────────────────────────────────────────────────────
 
