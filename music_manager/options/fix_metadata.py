@@ -98,20 +98,17 @@ def find_all_divergences(
     # Process album by album
     albums_divs: dict[int, AlbumDivergences] = {}
 
-    # Count albums needing API fetch (not in cache)
+    # Prefetch uncached albums in parallel (Deezer + iTunes API)
     uncached = [
         aid
         for aid in album_tracks
         if not albums_store.get(aid) or "_tracklist" not in (albums_store.get(aid) or {})
     ]
-    fetch_idx = 0
+
+    if uncached:
+        _prefetch_albums(uncached, albums_store, on_fetch)
 
     for album_id, entries_list in album_tracks.items():
-        needs_fetch = album_id in uncached
-        if needs_fetch and on_fetch:
-            fetch_idx += 1
-            on_fetch(fetch_idx, len(uncached))
-
         album_data = fetch_album_with_cover(album_id, albums_store)
         if not album_data:
             continue
@@ -596,6 +593,45 @@ def _import_converted(apple_id: str, tmp_m4a: str, tracks_store: Tracks) -> str:
         pass
 
     return new_apple_id
+
+
+def _prefetch_albums(
+    album_ids: list[int],
+    albums_store: Albums,
+    on_fetch: Callable[[int, int], None] | None = None,
+) -> None:
+    """Prefetch uncached albums in parallel (Deezer + iTunes API).
+
+    Results are applied sequentially to albums_store (not thread-safe).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: PLC0415
+
+    from music_manager.services.resolver import (  # noqa: PLC0415
+        deezer_get,
+        fetch_album_with_cover,
+    )
+
+    total = len(album_ids)
+
+    def _fetch_one(album_id: int) -> tuple[int, dict]:
+        """Fetch album data + tracklist from Deezer. Returns (album_id, data)."""
+        data = fetch_album_with_cover(album_id, albums_store)
+        if data and "_tracklist" not in data:
+            tracklist_data = deezer_get(f"/album/{album_id}/tracks?limit=100")
+            if tracklist_data:
+                data["_tracklist"] = tracklist_data.get("data", [])
+        return album_id, data
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_fetch_one, aid): aid for aid in album_ids}
+        for future in as_completed(futures):
+            album_id, data = future.result()
+            if data:
+                albums_store.put(album_id, data)
+            done += 1
+            if on_fetch:
+                on_fetch(done, total)
 
 
 def _auto_fix_store(
