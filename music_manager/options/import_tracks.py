@@ -196,11 +196,15 @@ def find_apple_id(isrc: str, title: str, artist: str, tracks_store: Tracks) -> s
 
     isrc = (isrc or "").upper()
 
-    # By ISRC
+    # By ISRC (index lookup, then fallback scan for same ISRC with apple_id)
     if isrc:
         entry = tracks_store.get_by_isrc(isrc)
         if entry and entry.get("apple_id"):
             return entry["apple_id"]
+        # Index may point to entry without apple_id — scan for another with same ISRC
+        for other in tracks_store.all().values():
+            if (other.get("isrc", "") or "").upper() == isrc and other.get("apple_id"):
+                return other["apple_id"]
 
     # O(1) index lookup by normalized title+artist
     norm_title = normalize(title)

@@ -170,9 +170,9 @@ class CompleteMixin(_MixinBase):
                     )
                     self._save_all()
                 except Exception as exc:  # noqa: BLE001
-                    from music_manager.core.logger import log_event as log_err  # noqa: PLC0415
+                    from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-                    log_err("worker_error", error=str(exc))
+                    log_worker_error(exc)
         finally:
             set_rate_limit_callback(None)
 

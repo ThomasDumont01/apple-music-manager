@@ -78,9 +78,9 @@ class ImportMixin(_MixinBase):
 
             self.app.call_from_thread(self._on_playlist_synced, csv_name, pl_added, pl_already)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_playlist_synced, csv_name, 0, len(rows))
 
     def _on_playlist_synced(self, csv_name: str, pl_added: int, pl_already: int) -> None:

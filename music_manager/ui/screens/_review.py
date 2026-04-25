@@ -351,9 +351,9 @@ class ReviewMixin(_MixinBase):
                 # Failed again — re-show review with same pending
                 self.app.call_from_thread(self._on_retry_failed)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_retry_failed)
 
     def _on_retry_success(self, pending: PendingTrack) -> None:
@@ -641,9 +641,9 @@ class ReviewMixin(_MixinBase):
                     else:
                         self.app.call_from_thread(self._on_search_failed)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_search_failed)
 
     def _on_search_resolved(self, track) -> None:
@@ -699,9 +699,9 @@ class ReviewMixin(_MixinBase):
 
             self.app.call_from_thread(self._on_youtube_downloaded, pending)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_search_failed)
 
     def _on_youtube_downloaded(self, pending: PendingTrack) -> None:
@@ -767,9 +767,9 @@ class ReviewMixin(_MixinBase):
 
             self.app.call_from_thread(self._on_review_imported)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_review_failed)
 
     # ── Review: import workers ─────────────────────────────────────────────
@@ -797,9 +797,9 @@ class ReviewMixin(_MixinBase):
             track = build_track(source, album_data)
             self.app.call_from_thread(self._do_batch_import, track, pending)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_review_failed)
 
     def _do_batch_import(self, track, pending: PendingTrack) -> None:
@@ -831,9 +831,9 @@ class ReviewMixin(_MixinBase):
             else:
                 self.app.call_from_thread(self._on_review_failed)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_review_failed)
 
     def _on_review_imported(self) -> None:

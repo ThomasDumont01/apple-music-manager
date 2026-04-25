@@ -265,7 +265,7 @@ COMPLETE_NONE_FOUND = "Tous les albums sont complets."
 COMPLETE_APPLY = "Compléter la sélection"
 COMPLETE_BACK = "Retour"
 
-HELP_COMPLETE = "↑↓  naviguer    espace  cocher/décocher    ⏎  compléter"
+HELP_COMPLETE = "↑↓  naviguer    espace  cocher/décocher    a  tout    ⏎  compléter"
 HELP_COMPLETE_PROGRESS = "  complétion en cours..."
 RATE_LIMIT_WAIT = "Limite YouTube atteinte — nouvel essai dans {seconds}s…"
 

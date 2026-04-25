@@ -68,9 +68,9 @@ class IdentifyMixin(_MixinBase):
             self._save_all()
             self.app.call_from_thread(self._on_identify_done, result)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_identify_done, None)
 
     def _identify_render_progress(
@@ -286,9 +286,9 @@ class IdentifyMixin(_MixinBase):
                 no_match_ids,
             )
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._identify_show_summary)
 
     def _on_batch_resolved(
@@ -360,9 +360,9 @@ class IdentifyMixin(_MixinBase):
                 self._albums_store,
             )
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             editions = []
         self.app.call_from_thread(self._on_identify_album_found, editions)
 
@@ -522,9 +522,9 @@ class IdentifyMixin(_MixinBase):
                 unmatched_ids,
             )
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(
                 self._on_identify_album_confirmed,
                 0,
@@ -623,9 +623,9 @@ class IdentifyMixin(_MixinBase):
                 remaining_ids,
             )
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._identify_show_summary)
 
     def _on_individual_resolved(

@@ -142,9 +142,9 @@ class ExportMixin(_MixinBase):
                     total_playlists += 1
                     log_event("export_playlist", name=name, tracks=count, path=filepath)
             except Exception as exc:  # noqa: BLE001
-                from music_manager.core.logger import log_event as log_err  # noqa: PLC0415
+                from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-                log_err("worker_error", error=str(exc))
+                log_worker_error(exc)
 
         self.app.call_from_thread(self._export_done, total_playlists, total_exported)
 

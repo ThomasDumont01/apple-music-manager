@@ -7,6 +7,7 @@ single JSON line in logs.jsonl. Used for debugging and traceability.
 import json
 import os
 import threading
+import traceback
 from datetime import datetime
 
 # ── Module state ─────────────────────────────────────────────────────────────
@@ -45,3 +46,12 @@ def log_event(action: str, **data: object) -> None:
                 file.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError:
         pass
+
+
+def log_worker_error(exc: BaseException) -> None:
+    """Log a worker_error with exception type and traceback."""
+    log_event(
+        "worker_error",
+        error=f"{type(exc).__name__}: {exc}",
+        traceback=traceback.format_exc(),
+    )

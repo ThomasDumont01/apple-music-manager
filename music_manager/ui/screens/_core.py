@@ -85,6 +85,7 @@ class MenuScreenCore(_Base):
         Binding("enter", "select", "Select", show=False),
         Binding("escape", "back", "Back", show=False),
         Binding("space", "toggle", "Toggle", show=False),
+        Binding("a", "toggle_all", "Toggle all", show=False),
         Binding("s", "skip", "Skip", show=False),
         Binding("p", "preview", "Preview", show=False),
     ]
@@ -648,6 +649,17 @@ class MenuScreenCore(_Base):
             if self._fix_cursor < len(self._fix_unique_indices):
                 self._fix_checks[self._fix_cursor] = not self._fix_checks[self._fix_cursor]
                 self._refresh_fix_body()
+
+    def action_toggle_all(self) -> None:  # type: ignore[override]
+        """A key — toggle all checkboxes."""
+        if self._view == "completing":
+            all_checked = all(self._complete_checks)
+            self._complete_checks = [not all_checked] * len(self._complete_checks)
+            self._refresh_complete_body()
+        elif self._view == "exporting":
+            all_checked = all(self._export_checks)
+            self._export_checks = [not all_checked] * len(self._export_checks)
+            self._refresh_export_body()
 
     def action_skip(self) -> None:
         """S key."""

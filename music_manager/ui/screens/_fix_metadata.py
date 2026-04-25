@@ -73,9 +73,9 @@ class FixMetadataMixin(_MixinBase):
             )
             self.app.call_from_thread(self._on_divergences_found, divs)
         except Exception as exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            log_event("worker_error", error=str(exc))
+            log_worker_error(exc)
             self.app.call_from_thread(self._on_divergences_found, [])
 
     def _on_divergences_found(self, album_divs: list) -> None:

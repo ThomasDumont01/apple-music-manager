@@ -275,9 +275,9 @@ class ModifyMixin(_MixinBase):
         try:
             editions = search_editions(title, artist)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             editions = []
         self.app.call_from_thread(self._on_editions_loaded, editions, current_isrc)
 
@@ -346,9 +346,9 @@ class ModifyMixin(_MixinBase):
             )
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     def _modify_preview_edition(self) -> None:
@@ -392,9 +392,9 @@ class ModifyMixin(_MixinBase):
             )
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     # ── Modify: replace URL ────────────────────────────────────────────────
@@ -453,9 +453,9 @@ class ModifyMixin(_MixinBase):
             )
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     # ── Modify: covers ─────────────────────────────────────────────────────
@@ -489,9 +489,9 @@ class ModifyMixin(_MixinBase):
         try:
             covers = search_covers(album, artist)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             covers = []
         self.app.call_from_thread(self._on_covers_loaded, covers)
 
@@ -594,9 +594,9 @@ class ModifyMixin(_MixinBase):
             result = change_cover_track(apple_id, cover_url, self._tracks_store, self._paths)
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     @work(thread=True)
@@ -611,9 +611,9 @@ class ModifyMixin(_MixinBase):
             result = change_cover_album(tracks, cover_url, self._paths)
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     def _modify_preview_cover(self) -> None:
@@ -766,9 +766,9 @@ class ModifyMixin(_MixinBase):
             result = edit_metadata_track(apple_id, fields, self._tracks_store)
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     @work(thread=True)
@@ -783,9 +783,9 @@ class ModifyMixin(_MixinBase):
             result = edit_metadata_album(tracks, fields, self._tracks_store)
             self.app.call_from_thread(self._on_modify_done, result.success, result.error)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     # ── Modify: album edition ───────────────────────────────────────��──────
@@ -808,9 +808,9 @@ class ModifyMixin(_MixinBase):
         try:
             editions = search_album_editions(album, artist, self._albums_store)
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             editions = []
         self.app.call_from_thread(self._on_album_editions_loaded, editions)
 
@@ -908,9 +908,9 @@ class ModifyMixin(_MixinBase):
                     result.error,
                 )
         except Exception as _exc:  # noqa: BLE001
-            from music_manager.core.logger import log_event as _le  # noqa: PLC0415
+            from music_manager.core.logger import log_worker_error  # noqa: PLC0415
 
-            _le("worker_error", error=str(_exc))
+            log_worker_error(_exc)
             self.app.call_from_thread(self._on_modify_done, False, "unexpected_error")
 
     # ── Modify: common result ──────────────────────────────────────────────
