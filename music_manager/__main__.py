@@ -55,6 +55,9 @@ def main() -> None:
 
     _log_session_start(log_event, config, paths)
 
+    # ── Log upload (every 2 weeks) ──────────────────────
+    _try_upload_logs(config, paths)
+
     # ── Convert Exportify CSVs before UI ─────────────────
     _convert_all_exportify(paths.requests_path, paths.playlists_dir)
 
@@ -101,6 +104,16 @@ def main() -> None:
 
 
 # ── Private Functions ────────────────────────────────────────────────────────
+
+
+def _try_upload_logs(config: dict, paths: object) -> None:
+    """Upload logs to analytics endpoint if interval elapsed."""
+    try:
+        from music_manager.services.log_uploader import upload_logs  # noqa: PLC0415
+
+        upload_logs(getattr(paths, "logs_path", ""), config)
+    except Exception:  # noqa: BLE001
+        pass  # never block startup
 
 
 def _log_session_start(

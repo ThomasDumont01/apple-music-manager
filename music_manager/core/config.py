@@ -16,6 +16,9 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 _DEFAULTS = {
     "data_root": "",
     "setup_done": False,
+    "last_log_upload": "",
+    "install_id": "",
+    "telemetry_consent": True,
 }
 
 
