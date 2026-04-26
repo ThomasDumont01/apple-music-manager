@@ -190,14 +190,21 @@ class ReviewMixin(_MixinBase):
                     title=pending.csv_title,
                     artist=pending.csv_artist,
                     deezer_id=pending.track.deezer_id,
+                    deezer_album=pending.track.album,
+                    local_album=pending.csv_album,
+                    reason=pending.reason,
                 )
             elif pending.candidates:
-                self._accepted.append((pending, "candidate", pending.candidates[0]))
+                cand = pending.candidates[0]
+                self._accepted.append((pending, "candidate", cand))
                 log_event(
                     "review_accept",
                     title=pending.csv_title,
                     artist=pending.csv_artist,
-                    deezer_id=pending.candidates[0].get("id", 0),
+                    deezer_id=cand.get("id", 0),
+                    deezer_album=cand.get("album", {}).get("title", ""),
+                    local_album=pending.csv_album,
+                    reason=pending.reason,
                 )
             self._advance_review()
         elif key == "accept_audio" and pending.track:
@@ -371,7 +378,18 @@ class ReviewMixin(_MixinBase):
 
         if self._pending_idx < len(self._pending):
             p = self._pending[self._pending_idx]
-            log_event("review_skip", title=p.csv_title, artist=p.csv_artist, reason=p.reason)
+            data: dict[str, object] = {
+                "title": p.csv_title,
+                "artist": p.csv_artist,
+                "reason": p.reason,
+            }
+            if p.csv_album:
+                data["local_album"] = p.csv_album
+            if p.track:
+                data["deezer_album"] = p.track.album
+                data["isrc"] = p.track.isrc
+                data["deezer_id"] = p.track.deezer_id
+            log_event("review_skip", **data)
         self._review_skipped += 1
         self._advance_review()
 

@@ -198,6 +198,14 @@ def run_import_pipeline(
                 candidates = search_by_isrc(track.isrc)
 
                 if not candidates:
+                    log_event(
+                        "import_track_failed",
+                        isrc=track.isrc,
+                        title=track.title,
+                        artist=track.artist,
+                        album=track.album,
+                        reason="youtube_not_found",
+                    )
                     record_pending(make_pending(
                         track, "youtube_failed", csv_title, csv_artist, csv_album,
                     ))
@@ -255,6 +263,14 @@ def run_import_pipeline(
                     strip_youtube_tags(dl_path)
 
                 if dl_path is None:
+                    log_event(
+                        "import_track_failed",
+                        isrc=sr.track.isrc,
+                        title=sr.track.title,
+                        artist=sr.track.artist,
+                        reason="download_failed",
+                        url=sr.yt_url,
+                    )
                     record_pending(make_pending(
                         sr.track, "youtube_failed",
                         sr.csv_title, sr.csv_artist, sr.csv_album,
@@ -266,6 +282,16 @@ def run_import_pipeline(
                 if actual_duration and sr.track.duration:
                     ratio = actual_duration / sr.track.duration
                     if ratio < _DURATION_RATIO_MIN or ratio > _DURATION_RATIO_MAX:
+                        log_event(
+                            "import_track_failed",
+                            isrc=sr.track.isrc,
+                            title=sr.track.title,
+                            artist=sr.track.artist,
+                            reason="duration_suspect",
+                            expected=sr.track.duration,
+                            actual=actual_duration,
+                            ratio=round(ratio, 3),
+                        )
                         record_pending(make_pending(
                             sr.track, "duration_suspect",
                             sr.csv_title, sr.csv_artist, sr.csv_album,

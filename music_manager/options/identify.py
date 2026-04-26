@@ -206,6 +206,7 @@ def _match_known_albums(
     on_progress: Callable[[int, int], None] | None,
 ) -> list[tuple[str, dict]]:
     """Phase 2: match tracks in known album tracklists (0 API calls)."""
+    from music_manager.core.logger import log_event  # noqa: PLC0415
     from music_manager.services.resolver import (  # noqa: PLC0415
         get_album_tracklist,
         resolve_by_id,
@@ -229,9 +230,16 @@ def _match_known_albums(
         if on_progress:
             on_progress(idx + 1, total)
 
+        title = entry.get("title") or ""
+        artist = entry.get("artist") or ""
         album = entry.get("album") or ""
         album_id = known_albums.get(normalize(album), 0) if album else 0
         if not album_id:
+            log_event(
+                "identify_phase2_miss",
+                title=title, artist=artist, album=album,
+                reason="unknown_album",
+            )
             remaining.append((apple_id, entry))
             continue
 
@@ -247,13 +255,24 @@ def _match_known_albums(
 
         tracklist = tracklist_cache[album_id]
         if not tracklist:
+            log_event(
+                "identify_phase2_miss",
+                title=title, artist=artist, album=album,
+                reason="empty_tracklist", album_id=album_id,
+            )
             remaining.append((apple_id, entry))
             continue
 
         # Match by title
-        title = entry.get("title") or ""
         dz_match = _find_in_tracklist(title, tracklist)
         if not dz_match:
+            dz_titles = [t.get("title", "") for t in tracklist[:5]]
+            log_event(
+                "identify_phase2_miss",
+                title=title, artist=artist, album=album,
+                reason="title_not_in_tracklist", album_id=album_id,
+                tracklist_size=len(tracklist), sample_titles=dz_titles,
+            )
             remaining.append((apple_id, entry))
             continue
 
@@ -263,6 +282,11 @@ def _match_known_albums(
             store_track_data(apple_id, full, entry, tracks_store)
             result.auto_validated += 1
         else:
+            log_event(
+                "identify_phase2_miss",
+                title=title, artist=artist, album=album,
+                reason="resolve_by_id_failed", dz_id=dz_id,
+            )
             remaining.append((apple_id, entry))
 
     return remaining

@@ -101,10 +101,13 @@ def resolve(
     if isrc:
         result = _resolve_by_isrc(isrc, title, artist, album, albums_store)
         if result:
+            _log_resolve_result(title, artist, album, isrc, result, "isrc")
             return result
 
     # 2. Fallback: title+artist search (multi-pass)
-    return _search_and_match(title, artist, album, albums_store)
+    result = _search_and_match(title, artist, album, albums_store)
+    _log_resolve_result(title, artist, album, isrc, result, "search")
+    return result
 
 
 # ── Private Functions ────────────────────────────────────────────────────────
@@ -125,6 +128,9 @@ def _resolve_by_isrc(
     """
     data = deezer_get(f"/track/isrc:{isrc}")
     if not data or "error" in data:
+        _log_resolve_detail(
+            "isrc_not_on_deezer", isrc=isrc, title=title, artist=artist,
+        )
         return None  # ISRC not on Deezer → caller falls back to search
 
     dz_title = data.get("title", "")
@@ -138,6 +144,10 @@ def _resolve_by_isrc(
 
     if not isrc_is_correct:
         # ISRC points to a completely different song → ignore, fallback to search
+        _log_resolve_detail(
+            "isrc_wrong_song", isrc=isrc, title=title, artist=artist,
+            dz_title=dz_title, dz_artist=dz_artist,
+        )
         return None
 
     # No album in CSV or album matches → resolved directly
@@ -152,6 +162,7 @@ def _resolve_by_isrc(
 
     # Correct album not found → mismatch (user decides)
     album_data = fetch_album_with_cover(data.get("album", {}).get("id", 0), albums_store)
+    _log_mismatch(title, artist, album, dz_album_title, isrc, "isrc_album_differs")
     return ResolveResult("mismatch", track=build_track(data, album_data), album_mismatch=True)
 
 
@@ -373,6 +384,8 @@ def _search_and_match(
     Pass 2: first_artist only (strips feat/ft)
     Pass 3: free text query (catches localization)
     """
+    raw_total = 0  # total raw Deezer results before our filter (pass 3 only)
+
     # Pass 1: full artist
     matches = _search_deezer(title, artist)
 
@@ -388,7 +401,9 @@ def _search_and_match(
         query = f"{title} {primary}"
         data = deezer_get(f"/search/track?q={urllib.parse.quote(query)}&limit=15")
         if data:
-            for item in data.get("data", []):
+            raw_results = data.get("data", [])
+            raw_total = len(raw_results)
+            for item in raw_results:
                 dz_title = item.get("title", "")
                 dz_artist = item.get("artist", {}).get("name", "")
                 if is_match(title, dz_title, "title") and is_match(
@@ -397,6 +412,7 @@ def _search_and_match(
                     matches.append(item)
 
     if not matches:
+        _log_search_empty(title, artist, album, raw_total)
         return ResolveResult("not_found")
 
     # Filter by album if provided — prefer exact case-insensitive over normalize
@@ -451,7 +467,9 @@ def _search_and_match(
         # Still no match → mismatch or ambiguous
         if len(matches) == 1:
             full = _enrich_track_data(matches[0])
+            dz_alb = full.get("album", {}).get("title", "")
             album_data = fetch_album_with_cover(full.get("album", {}).get("id", 0), albums_store)
+            _log_mismatch(title, artist, album, dz_alb, "", "search_album_differs")
             return ResolveResult(
                 "mismatch",
                 track=build_track(full, album_data),
@@ -989,7 +1007,7 @@ def deezer_get(endpoint: str) -> dict | None:
                     oldest = next(iter(_API_CACHE))
                     del _API_CACHE[oldest]
                 _API_CACHE[endpoint] = None
-            _log_deezer(endpoint, duration_ms, 200, error=True)
+            # "not found" is normal Deezer behavior, not an error — don't log
             return None
         # Success — reset circuit breaker
         with _CACHE_LOCK:
@@ -998,7 +1016,9 @@ def deezer_get(endpoint: str) -> dict | None:
                 oldest = next(iter(_API_CACHE))
                 del _API_CACHE[oldest]
             _API_CACHE[endpoint] = data
-        _log_deezer(endpoint, duration_ms, 200)
+        # Only log slow requests (>2s) — normal requests are too frequent
+        if duration_ms > 2000:
+            _log_deezer(endpoint, duration_ms, 200)
         return data
     except (requests.ConnectionError, requests.Timeout) as exc:
         duration_ms = int((time.monotonic() - t0) * 1000)
@@ -1039,4 +1059,73 @@ def _log_circuit_breaker(consecutive_failures: int) -> None:
         "deezer_circuit_breaker",
         consecutive_failures=consecutive_failures,
         cooldown_seconds=_CIRCUIT_BREAKER_COOLDOWN,
+    )
+
+
+def _log_resolve_result(
+    title: str, artist: str, album: str, isrc: str,
+    result: ResolveResult, method: str,
+) -> None:
+    """Log every resolve() outcome — the master diagnostic event."""
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    data: dict[str, object] = {
+        "title": title,
+        "artist": artist,
+        "local_album": album,
+        "status": result.status,
+        "method": method,
+    }
+    if isrc:
+        data["isrc"] = isrc
+    if result.track:
+        data["deezer_id"] = result.track.deezer_id
+        data["deezer_album"] = result.track.album
+    if result.candidates:
+        data["candidate_count"] = len(result.candidates)
+    log_event("resolve_result", **data)
+
+
+def _log_resolve_detail(reason: str, **data: object) -> None:
+    """Log ISRC-specific sub-diagnostic (why ISRC path failed)."""
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    log_event("resolve_detail", reason=reason, **data)
+
+
+def _log_search_empty(
+    title: str, artist: str, album: str, raw_deezer_results: int,
+) -> None:
+    """Log when title+artist search matched nothing.
+
+    raw_deezer_results > 0 means Deezer had results but our matching rejected
+    them all → possible normalization/threshold issue.
+    raw_deezer_results == 0 means Deezer genuinely has nothing.
+    """
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    log_event(
+        "resolve_search_empty",
+        title=title,
+        artist=artist,
+        local_album=album,
+        raw_deezer_results=raw_deezer_results,
+    )
+
+
+def _log_mismatch(
+    title: str, artist: str, local_album: str, deezer_album: str,
+    isrc: str, reason: str,
+) -> None:
+    """Log album mismatch — local album vs Deezer album for diagnostics."""
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    log_event(
+        "resolve_mismatch",
+        title=title,
+        artist=artist,
+        local_album=local_album,
+        deezer_album=deezer_album,
+        reason=reason,
+        **({"isrc": isrc} if isrc else {}),
     )

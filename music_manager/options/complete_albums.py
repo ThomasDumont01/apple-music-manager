@@ -138,6 +138,19 @@ def complete_album(
     if not missing:
         return result
 
+    # Log each missing track before pipeline starts
+    from music_manager.core.logger import log_event  # noqa: PLC0415
+
+    album_title = (album_data or {}).get("title", "")
+    missing_titles = [m.get("title", "") for m in missing]
+    log_event(
+        "complete_missing_tracks",
+        album_id=album_id,
+        album=album_title,
+        count=len(missing),
+        tracks=missing_titles,
+    )
+
     # Remove previously failed imports before pipeline
     for dz_track in missing:
         isrc = dz_track.get("isrc", "")
