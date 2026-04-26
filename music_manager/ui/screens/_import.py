@@ -3,10 +3,9 @@
 import os
 from typing import TYPE_CHECKING
 
+from rich.text import Text
 from textual import work
 from textual.containers import ScrollableContainer
-
-from rich.text import Text
 
 from music_manager.core.io import load_csv
 from music_manager.options.import_tracks import ImportResult
@@ -236,7 +235,9 @@ class ImportMixin(_MixinBase):
         """Show rate limit warning in import progress."""
         from music_manager.ui.text import RATE_LIMIT_WAIT  # noqa: PLC0415
 
-        self._import_lines.append(Text(f"  ⏳ {RATE_LIMIT_WAIT.format(seconds=seconds)}", style="yellow"))
+        self._import_lines.append(
+            Text(f"  ⏳ {RATE_LIMIT_WAIT.format(seconds=seconds)}", style="yellow")
+        )
         self._set_body(render_import_body(self._import_lines))
 
     def _on_import_done(self, result) -> None:
