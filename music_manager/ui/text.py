@@ -270,6 +270,13 @@ HELP_COMPLETE_PROGRESS = "  complétion en cours..."
 RATE_LIMIT_WAIT = "Limite YouTube atteinte — nouvel essai dans {wait}…"
 RATE_LIMIT_REASON = "{reason} — nouvel essai dans {wait}…"
 
+COOKIES_FOUND = "Compte YouTube détecté dans Safari. Utiliser les cookies ?"
+COOKIES_NOT_FOUND = "Connexion YouTube requise pour cette vidéo."
+COOKIES_WAIT_LOGIN = "Connectez-vous à YouTube dans Safari, puis appuyez sur Entrée…"
+COOKIES_ACTIVATED = "✓ Cookies Safari activés pour cette session"
+COOKIES_FAILED = "Cookies Safari invalides — vidéo ignorée"
+COOKIES_DECLINED = "Vidéos restreintes ignorées pour cette session"
+
 
 def format_wait(seconds: int) -> str:
     """Format seconds into human-readable wait time (30s, 2min, 30min, 1h)."""

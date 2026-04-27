@@ -1,5 +1,7 @@
 """Complete albums mixin — import missing tracks from identified albums."""
 
+import subprocess
+import threading
 from typing import TYPE_CHECKING
 
 from textual import work
@@ -115,6 +117,7 @@ class CompleteMixin(_MixinBase):
         from music_manager.options.complete_albums import complete_album  # noqa: PLC0415
         from music_manager.services.youtube import (  # noqa: PLC0415
             reset_throttle,
+            set_cookies_callback,
             set_rate_limit_callback,
         )
 
@@ -128,12 +131,19 @@ class CompleteMixin(_MixinBase):
         total_failed = 0
 
         self._cancel_requested = False
+        self._cookies_event: threading.Event | None = None
+        self._cookies_cursor = 0
+        self._cookies_answer = False
         reset_throttle()
 
         def _on_rate_limit(seconds: int, reason: str) -> None:
             self.app.call_from_thread(self._complete_render_rate_limit, seconds, reason)
 
+        def _on_cookies_needed() -> bool:
+            return self._complete_cookies_prompt()
+
         set_rate_limit_callback(_on_rate_limit)
+        set_cookies_callback(_on_cookies_needed)
 
         try:
             for album_idx, album in enumerate(albums):
@@ -181,6 +191,7 @@ class CompleteMixin(_MixinBase):
                     log_worker_error(exc)
         finally:
             set_rate_limit_callback(None)
+            set_cookies_callback(None)
 
         batch_ms = int((_time.monotonic() - batch_t0) * 1000)
         self.app.call_from_thread(self._complete_done, total_imported, total_failed, batch_ms)
@@ -255,3 +266,32 @@ class CompleteMixin(_MixinBase):
         self._set_header(render_sub_header(COMPLETE_TITLE))
         self._set_body(render_complete_summary(imported, failed))
         self._set_help(HELP_BACK, with_newline=False)
+
+    # ── Cookies prompt ────────────────────────────────────────────────────
+
+    def _complete_cookies_prompt(self) -> bool:
+        """Called from worker thread. Check Safari cookies, prompt user, return decision."""
+        from music_manager.services.youtube import check_safari_youtube_login  # noqa: PLC0415
+
+        has_cookies = check_safari_youtube_login()
+        self._cookies_event = threading.Event()
+        self._cookies_answer = False
+        self._cookies_cursor = 0
+
+        if has_cookies:
+            self.app.call_from_thread(self._show_cookies_prompt, "found")
+        else:
+            self.app.call_from_thread(self._show_cookies_prompt, "missing")
+
+        self._cookies_event.wait()  # blocks worker thread
+
+        if not has_cookies and self._cookies_answer:
+            # User chose "open Safari" → launch browser, wait for Enter
+            subprocess.Popen(["open", "https://www.youtube.com"])  # noqa: S603, S607
+            self._cookies_event = threading.Event()
+            self.app.call_from_thread(self._show_cookies_prompt, "wait_login")
+            self._cookies_event.wait()  # blocks until Enter
+
+        return self._cookies_answer
+
+    # _show_cookies_prompt, _cookies_select, _cookies_move → shared in _core.py

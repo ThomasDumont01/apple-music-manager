@@ -17,6 +17,7 @@ from music_manager.services.youtube import (
     download_track,
     reset_throttle,
     search_by_isrc,
+    set_cookies_callback,
     set_rate_limit_callback,
 )
 
@@ -28,7 +29,6 @@ _NO_THROTTLE = {
     "_SEARCH_JITTER": 0,
     "_BACKOFF_BASE": 0.01,
     "_BACKOFF_MAX": 0.05,
-    "_RATE_LIMIT_BACKOFF": 0.01,
 }
 
 # Simulates a yt-dlp error (non-zero returncode + stderr)
@@ -59,9 +59,15 @@ def _reset_state():
     """Reset throttle state before each test."""
     reset_throttle()
     set_rate_limit_callback(None)
+    set_cookies_callback(None)
+    yt._use_cookies = False
+    yt._cookies_decided = False
     yield
     reset_throttle()
     set_rate_limit_callback(None)
+    set_cookies_callback(None)
+    yt._use_cookies = False
+    yt._cookies_decided = False
 
 
 # ── search_by_isrc ────────────────────────────────────────────────────────
@@ -258,7 +264,6 @@ def test_rate_limit_callback_receives_seconds_and_reason(
         _BACKOFF_BASE=30,
         _BACKOFF_MAX=1800,
         _JITTER_FACTOR=0,
-        _RATE_LIMIT_BACKOFF=0.01,
     ), patch(f"{_PATCH}.time.sleep"):
         search_by_isrc("FAIL1")  # error → backoff + callback
 
@@ -347,10 +352,10 @@ def test_error_triggers_exponential_backoff(
 
 @patch(f"{_PATCH}.log_event")
 @patch(f"{_PATCH}.subprocess.run")
-def test_rate_limit_detected_in_stderr(
+def test_sign_in_detected_as_cookies_needed(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
-    """'Sign in to confirm' in stderr → rate-limited, long backoff."""
+    """'Sign in to confirm' in stderr → cookies needed, no backoff."""
     mock_run.return_value = MagicMock(
         stdout="", stderr="Sign in to confirm you're not a bot", returncode=1
     )
@@ -359,14 +364,12 @@ def test_rate_limit_detected_in_stderr(
     set_rate_limit_callback(lambda s, r: rate_events.append((s, r)))
 
     with patch.multiple(_PATCH, **_NO_THROTTLE):
-        search_by_isrc("BLOCKED")
+        result = search_by_isrc("BLOCKED")
 
-    assert len(rate_events) >= 1
-    seconds, reason = rate_events[0]
-    # Rate-limit backoff is _RATE_LIMIT_BACKOFF (patched to 0.01 in _NO_THROTTLE)
-    assert seconds > 0
-    assert "sign in" in reason.lower()
-    # Should NOT increment _consecutive_fails (rate-limit is separate)
+    # No rate-limit callback — cookies path, not rate-limit path
+    assert len(rate_events) == 0
+    assert result == []
+    # No backoff → _consecutive_fails not incremented
     assert yt._consecutive_fails == 0
 
 
@@ -375,7 +378,7 @@ def test_rate_limit_detected_in_stderr(
 def test_429_detected_as_rate_limit(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
-    """HTTP Error 429 in stderr detected as rate limit."""
+    """HTTP Error 429 in stderr detected as rate limit with backoff."""
     mock_run.return_value = MagicMock(
         stdout="", stderr="HTTP Error 429: Too Many Requests", returncode=1
     )
@@ -387,7 +390,7 @@ def test_429_detected_as_rate_limit(
         search_by_isrc("RATELIMITED")
 
     assert len(rate_events) >= 1
-    assert yt._consecutive_fails == 0  # rate-limit path skips _record_fail
+    assert yt._consecutive_fails > 0  # 429 now uses exponential backoff
 
 
 @patch(f"{_PATCH}.log_event")
@@ -407,7 +410,6 @@ def test_backoff_capped_at_max(mock_run: MagicMock, mock_log: MagicMock) -> None
         _BACKOFF_BASE=10,
         _BACKOFF_MAX=max_val,
         _JITTER_FACTOR=0.25,
-        _RATE_LIMIT_BACKOFF=0.01,
     ), patch(f"{_PATCH}.time.sleep"):
         for i in range(10):
             search_by_isrc(f"ERR{i}")
@@ -576,3 +578,148 @@ def test_find_latest_m4a_returns_newest(tmp_path: Path) -> None:
 def test_find_latest_m4a_empty_dir(tmp_path: Path) -> None:
     """Empty directory returns empty string."""
     assert _find_latest_m4a(str(tmp_path)) == ""
+
+
+# ── Cookies detection ────────────────────────────────────────────────────
+
+
+def test_detect_cookies_needed_age_gate() -> None:
+    """Age-gate stderr triggers cookies needed, not rate-limit."""
+    assert yt._detect_cookies_needed("Sign in to confirm your age") is True
+    assert yt._detect_rate_limit("Sign in to confirm your age") is False
+
+
+def test_detect_cookies_needed_bot_confirm() -> None:
+    """Bot-confirm stderr triggers cookies needed."""
+    assert yt._detect_cookies_needed("confirm you're not a bot") is True
+    assert yt._detect_rate_limit("confirm you're not a bot") is False
+
+
+def test_detect_rate_limit_429() -> None:
+    """HTTP 429 triggers rate-limit, not cookies."""
+    assert yt._detect_rate_limit("HTTP Error 429: Too Many Requests") is True
+    assert yt._detect_cookies_needed("HTTP Error 429: Too Many Requests") is False
+
+
+def test_detect_neither() -> None:
+    """Generic error triggers neither cookies nor rate-limit."""
+    assert yt._detect_cookies_needed("ERROR: network error") is False
+    assert yt._detect_rate_limit("ERROR: network error") is False
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_cookies_callback_activated(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """When cookies needed and callback returns True, retry with cookies."""
+    call_count = [0]
+
+    def _side_effect(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # First call: age-gate error
+            return MagicMock(stdout="", stderr="Sign in to confirm your age", returncode=1)
+        # Retry with cookies: success
+        return MagicMock(stdout=_make_candidate("cookie_ok") + "\n", stderr="", returncode=0)
+
+    mock_run.side_effect = _side_effect
+    set_cookies_callback(lambda: True)
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        result = search_by_isrc("AGEGATE")
+
+    assert len(result) == 1
+    assert result[0]["id"] == "cookie_ok"
+    assert yt._use_cookies is True
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_cookies_callback_declined(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """When cookies needed and callback returns False, skip immediately."""
+    mock_run.return_value = MagicMock(
+        stdout="", stderr="Sign in to confirm your age", returncode=1
+    )
+    set_cookies_callback(lambda: False)
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        result = search_by_isrc("AGEGATE")
+
+    assert result == []
+    assert yt._use_cookies is False
+    assert yt._cookies_decided is True
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_cookies_declined_skips_subsequent(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """Once declined, subsequent cookies-needed searches skip without callback."""
+    mock_run.return_value = MagicMock(
+        stdout="", stderr="Sign in to confirm your age", returncode=1
+    )
+
+    cb_calls = [0]
+
+    def _counting_cb() -> bool:
+        cb_calls[0] += 1
+        return False
+
+    set_cookies_callback(_counting_cb)
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        search_by_isrc("AGE1")  # triggers callback
+        search_by_isrc("AGE2")  # should skip without callback
+
+    assert cb_calls[0] == 1  # only called once
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_cookies_no_callback_returns_empty(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """Without callback, cookies-needed returns empty (no crash)."""
+    mock_run.return_value = MagicMock(
+        stdout="", stderr="Sign in to confirm your age", returncode=1
+    )
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        result = search_by_isrc("AGEGATE")
+
+    assert result == []
+
+
+def test_check_safari_cookies_missing_file() -> None:
+    """check_safari_youtube_login returns False when file doesn't exist."""
+    with patch(f"{_PATCH}._SAFARI_COOKIES_PATH", "/nonexistent/path"):
+        assert yt.check_safari_youtube_login() is False
+
+
+def test_check_safari_cookies_present(tmp_path: Path) -> None:
+    """check_safari_youtube_login returns True when auth cookies present."""
+    cookie_file = tmp_path / "Cookies.binarycookies"
+    cookie_file.write_bytes(b"stuff .youtube.com LOGIN_INFO=abc stuff")
+    with patch(f"{_PATCH}._SAFARI_COOKIES_PATH", str(cookie_file)):
+        assert yt.check_safari_youtube_login() is True
+
+
+def test_check_safari_cookies_no_login(tmp_path: Path) -> None:
+    """check_safari_youtube_login returns False when no auth cookies."""
+    cookie_file = tmp_path / "Cookies.binarycookies"
+    cookie_file.write_bytes(b"stuff .youtube.com visitor_id=xyz stuff")
+    with patch(f"{_PATCH}._SAFARI_COOKIES_PATH", str(cookie_file)):
+        assert yt.check_safari_youtube_login() is False
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_download_uses_cookies_flag(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """download_track includes --cookies-from-browser when _use_cookies=True."""
+    yt._use_cookies = True
+    mock_run.return_value = MagicMock(stdout="path.m4a\n200\n", stderr="", returncode=0)
+
+    with patch(f"{_PATCH}.os.path.exists", return_value=True), \
+         patch(f"{_PATCH}.os.path.getsize", return_value=1000), \
+         patch(f"{_PATCH}.os.makedirs"):
+        download_track("https://yt/v1", "/tmp/dl")
+
+    cmd = mock_run.call_args[0][0]
+    assert "--cookies-from-browser" in cmd
+    assert "safari" in cmd

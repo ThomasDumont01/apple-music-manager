@@ -17,6 +17,7 @@ resolved through :class:`MenuScreen`'s MRO (mixins first, then core).
 """
 
 import subprocess
+import threading
 from typing import Any, Protocol
 
 from textual.app import App
@@ -108,6 +109,13 @@ class MenuScreenProto(Protocol):
     _complete_checks: list[bool]
     _complete_cursor: int
     _complete_actions: list[str]
+
+    # ── Cookies prompt state ──────────────────────────────────────────────
+    _cookies_event: threading.Event | None
+    _cookies_cursor: int
+    _cookies_answer: bool
+    _cookies_prompt_type: str
+    _cookies_options: list[str]
 
     # ── Duplicates state ──────────────────────────────────────────────────
     _dup_groups: list[list[dict]]
@@ -236,6 +244,11 @@ class MenuScreenProto(Protocol):
     def _confirm_maintenance(self) -> None: ...
     def _refresh_maintenance_confirm(self) -> None: ...
     def _show_move_data_input(self) -> None: ...
+
+    # Cookies prompt (shared by complete + import)
+    def _show_cookies_prompt(self, prompt_type: str) -> None: ...
+    def _cookies_select(self) -> None: ...
+    def _cookies_move(self, direction: int) -> None: ...
 
     # Preview
     def _play_preview(self, url: str) -> None: ...

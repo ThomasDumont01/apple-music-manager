@@ -281,6 +281,77 @@ class MenuScreenCore(_Base):
         scroll.styles.height = "auto"
         scroll.scroll_home(animate=False)
 
+    # ── Cookies prompt (shared by complete + import) ─────────────────────
+
+    def _show_cookies_prompt(self, prompt_type: str) -> None:
+        """Show cookies prompt on main thread."""
+        from music_manager.ui.render import render_cookies_prompt  # noqa: PLC0415
+        from music_manager.ui.text import (  # noqa: PLC0415
+            COOKIES_FOUND,
+            COOKIES_NOT_FOUND,
+            COOKIES_WAIT_LOGIN,
+        )
+
+        self._cookies_prompt_type = prompt_type
+        # Save current view so ESC can restore it
+        cookies_views = ("cookies_prompt", "cookies_wait_login")
+        if prompt_type != "wait_login" and self._view not in cookies_views:
+            self._cookies_return_view = self._view
+
+        if prompt_type == "found":
+            self._cookies_options = ["Utiliser les cookies Safari", "Ignorer"]
+            self._view = "cookies_prompt"
+            self._set_body(render_cookies_prompt(
+                COOKIES_FOUND, self._cookies_options, self._cookies_cursor,
+            ))
+            self._set_help("↑↓  naviguer    ⏎  valider")
+        elif prompt_type == "missing":
+            self._cookies_options = ["Ouvrir Safari pour se connecter", "Ignorer"]
+            self._view = "cookies_prompt"
+            self._set_body(render_cookies_prompt(
+                COOKIES_NOT_FOUND, self._cookies_options, self._cookies_cursor,
+            ))
+            self._set_help("↑↓  naviguer    ⏎  valider")
+        elif prompt_type == "wait_login":
+            from rich.text import Text as RichText  # noqa: PLC0415
+
+            self._view = "cookies_wait_login"
+            body = RichText()
+            body.append(f"\n  {COOKIES_WAIT_LOGIN}", style="bold yellow")
+            self._set_body(body)
+            self._set_help("⏎  continuer")
+
+    def _cookies_select(self) -> None:
+        """Enter on cookies prompt — resolve the choice."""
+        if getattr(self, "_cookies_prompt_type", "") == "wait_login":
+            self._cookies_answer = True
+            self._view = getattr(self, "_cookies_return_view", "completing_progress")
+            ev = getattr(self, "_cookies_event", None)
+            if ev:
+                ev.set()
+            return
+
+        self._cookies_answer = getattr(self, "_cookies_cursor", 0) == 0
+        # Restore _view for proper ESC/cancel handling
+        if not self._cookies_answer:
+            self._view = getattr(self, "_cookies_return_view", "completing_progress")
+        ev = getattr(self, "_cookies_event", None)
+        if ev:
+            ev.set()
+
+    def _cookies_move(self, direction: int) -> None:
+        """Move cursor in cookies prompt."""
+        from music_manager.ui.render import render_cookies_prompt  # noqa: PLC0415
+        from music_manager.ui.text import COOKIES_FOUND, COOKIES_NOT_FOUND  # noqa: PLC0415
+
+        options = getattr(self, "_cookies_options", [])
+        if not options:
+            return
+        self._cookies_cursor = (self._cookies_cursor + direction) % len(options)
+        prompt_type = getattr(self, "_cookies_prompt_type", "missing")
+        msg = COOKIES_FOUND if prompt_type == "found" else COOKIES_NOT_FOUND
+        self._set_body(render_cookies_prompt(msg, options, self._cookies_cursor))
+
     # ── View switching ──────────────────────────────────────────────────────
 
     def _switch_view(self, view: str) -> None:
@@ -470,6 +541,9 @@ class MenuScreenCore(_Base):
             self._complete_cursor = (self._complete_cursor + direction) % total
             self._refresh_complete_body()
             return
+        if self._view == "cookies_prompt":
+            self._cookies_move(direction)
+            return
         if self._view == "fixing":
             self._fix_move(direction)
         elif self._view == "reviewing":
@@ -537,6 +611,9 @@ class MenuScreenCore(_Base):
             return
         if self._view == "completing":
             self._complete_select()
+            return
+        if self._view in ("cookies_prompt", "cookies_wait_login"):
+            self._cookies_select()
             return
         if self._view == "fixing":
             self._fix_select()
@@ -794,6 +871,14 @@ class MenuScreenCore(_Base):
             return
         elif self._view == "completing":
             self._switch_view("tools")
+            return
+        elif self._view in ("cookies_prompt", "cookies_wait_login"):
+            self._cookies_answer = False  # type: ignore[attr-defined]
+            # Restore _view so ESC/cancel still works after dismissal
+            self._view = getattr(self, "_cookies_return_view", "completing_progress")
+            ev = getattr(self, "_cookies_event", None)
+            if ev:
+                ev.set()
             return
         elif self._view == "completing_progress":
             self._cancel_requested = True

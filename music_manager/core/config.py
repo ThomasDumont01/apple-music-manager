@@ -19,6 +19,7 @@ _DEFAULTS = {
     "last_log_upload": "",
     "install_id": "",
     "telemetry_consent": True,
+    "youtube_cookies": False,
 }
 
 

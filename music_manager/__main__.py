@@ -50,6 +50,11 @@ def main() -> None:
 
     configure_resolver("fr")
 
+    if config.get("youtube_cookies"):
+        from music_manager.services.youtube import set_use_cookies  # noqa: PLC0415
+
+        set_use_cookies(True)
+
     # ── Session start log ────────────────────��───────────
     from music_manager.core.logger import log_event  # noqa: PLC0415
 

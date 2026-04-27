@@ -1,6 +1,8 @@
 """Import mixin — CSV import flow and queue management."""
 
 import os
+import subprocess
+import threading
 from typing import TYPE_CHECKING
 
 from rich.text import Text
@@ -182,6 +184,7 @@ class ImportMixin(_MixinBase):
         from music_manager.options.import_tracks import process_csv  # noqa: PLC0415
         from music_manager.services.youtube import (  # noqa: PLC0415
             reset_throttle,
+            set_cookies_callback,
             set_rate_limit_callback,
         )
 
@@ -190,11 +193,18 @@ class ImportMixin(_MixinBase):
             return
 
         reset_throttle()
+        self._cookies_event: threading.Event | None = None
+        self._cookies_cursor = 0
+        self._cookies_answer = False
 
         def _on_rate_limit(seconds: int, reason: str) -> None:
             self.app.call_from_thread(self._on_import_rate_limit, seconds, reason)
 
+        def _on_cookies_needed() -> bool:
+            return self._import_cookies_prompt()
+
         set_rate_limit_callback(_on_rate_limit)
+        set_cookies_callback(_on_cookies_needed)
 
         try:
             paths = self._paths
@@ -219,6 +229,7 @@ class ImportMixin(_MixinBase):
             result = ImportResult()
         finally:
             set_rate_limit_callback(None)
+            set_cookies_callback(None)
         self.app.call_from_thread(self._on_import_done, result)
 
     def _on_import_row(self, idx: int, total: int, title: str, artist: str, status: str) -> None:
@@ -350,3 +361,31 @@ class ImportMixin(_MixinBase):
         ]
         if len(remaining) < len(rows):
             save_csv(csv_path, remaining)
+
+    # ── Cookies prompt ────────────────────────────────────────────────────
+
+    def _import_cookies_prompt(self) -> bool:
+        """Called from worker thread. Check Safari cookies, prompt user, return decision."""
+        from music_manager.services.youtube import check_safari_youtube_login  # noqa: PLC0415
+
+        has_cookies = check_safari_youtube_login()
+        self._cookies_event = threading.Event()
+        self._cookies_answer = False
+        self._cookies_cursor = 0
+
+        if has_cookies:
+            self.app.call_from_thread(self._show_cookies_prompt, "found")
+        else:
+            self.app.call_from_thread(self._show_cookies_prompt, "missing")
+
+        self._cookies_event.wait()
+
+        if not has_cookies and self._cookies_answer:
+            subprocess.Popen(["open", "https://www.youtube.com"])  # noqa: S603, S607
+            self._cookies_event = threading.Event()
+            self.app.call_from_thread(self._show_cookies_prompt, "wait_login")
+            self._cookies_event.wait()
+
+        return self._cookies_answer
+
+    # _show_cookies_prompt, _cookies_select, _cookies_move → shared in _core.py

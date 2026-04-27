@@ -970,3 +970,27 @@ def render_modify_result(success: bool, error: str = "") -> Text:
         }.get(error, error or "Erreur inconnue")
         txt.append(f"\n  {CROSS}  {error_msg}\n", style="red")
     return txt
+
+
+# ── Cookies prompt ────────────────────────────────────────────────────────
+
+
+def render_cookies_prompt(message: str, options: list[str], cursor: int) -> Text:
+    """Render a cookies prompt with cursor selection.
+
+    message: warning text shown above options.
+    options: list of selectable labels.
+    cursor: currently selected index.
+    """
+    body = Text()
+    body.append(f"\n  ⚠ {message}\n\n", style="bold yellow")
+    for i, option in enumerate(options):
+        is_active = i == cursor
+        marker = MARKER if is_active else MARKER_EMPTY
+        if is_active:
+            body.append(f"  {marker}", style=f"bold {BLUE}")
+            body.append(option, style=f"bold {BLUE}")
+        else:
+            body.append(f"  {marker}{option}")
+        body.append("\n")
+    return body
