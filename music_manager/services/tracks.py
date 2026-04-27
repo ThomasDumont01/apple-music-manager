@@ -113,9 +113,10 @@ class Tracks:
 
     def save(self) -> None:
         """Write to disk if modified since last save."""
-        if self._dirty:
-            save_json(self._path, self._data)
-            self._dirty = False
+        with self._lock:
+            if self._dirty:
+                save_json(self._path, self._data)
+                self._dirty = False
 
     # ── Private Functions ────────────────────────────────────────────────────
 
