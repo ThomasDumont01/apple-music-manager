@@ -191,8 +191,8 @@ class ImportMixin(_MixinBase):
 
         reset_throttle()
 
-        def _on_rate_limit(seconds: int) -> None:
-            self.app.call_from_thread(self._on_import_rate_limit, seconds)
+        def _on_rate_limit(seconds: int, reason: str) -> None:
+            self.app.call_from_thread(self._on_import_rate_limit, seconds, reason)
 
         set_rate_limit_callback(_on_rate_limit)
 
@@ -231,13 +231,20 @@ class ImportMixin(_MixinBase):
         except Exception:  # noqa: BLE001
             pass
 
-    def _on_import_rate_limit(self, seconds: int) -> None:
+    def _on_import_rate_limit(self, seconds: int, reason: str = "") -> None:
         """Show rate limit warning in import progress."""
-        from music_manager.ui.text import RATE_LIMIT_WAIT  # noqa: PLC0415
-
-        self._import_lines.append(
-            Text(f"  ⏳ {RATE_LIMIT_WAIT.format(seconds=seconds)}", style="yellow")
+        from music_manager.ui.text import (  # noqa: PLC0415
+            RATE_LIMIT_REASON,
+            RATE_LIMIT_WAIT,
+            format_wait,
         )
+
+        wait = format_wait(seconds)
+        if reason:
+            msg = RATE_LIMIT_REASON.format(reason=reason, wait=wait)
+        else:
+            msg = RATE_LIMIT_WAIT.format(wait=wait)
+        self._import_lines.append(Text(f"  ⏳ {msg}", style="yellow"))
         self._set_body(render_import_body(self._import_lines))
 
     def _on_import_done(self, result) -> None:

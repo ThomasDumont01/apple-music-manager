@@ -130,8 +130,8 @@ class CompleteMixin(_MixinBase):
         self._cancel_requested = False
         reset_throttle()
 
-        def _on_rate_limit(seconds: int) -> None:
-            self.app.call_from_thread(self._complete_render_rate_limit, seconds)
+        def _on_rate_limit(seconds: int, reason: str) -> None:
+            self.app.call_from_thread(self._complete_render_rate_limit, seconds, reason)
 
         set_rate_limit_callback(_on_rate_limit)
 
@@ -217,17 +217,23 @@ class CompleteMixin(_MixinBase):
         self._set_body(body)
         self._set_help("")
 
-    def _complete_render_rate_limit(self, seconds: int) -> None:
+    def _complete_render_rate_limit(self, seconds: int, reason: str = "") -> None:
         """Show rate limit warning below progress bar."""
         from rich.text import Text as RichText  # noqa: PLC0415
 
-        from music_manager.ui.text import RATE_LIMIT_WAIT  # noqa: PLC0415
-
-        body = RichText()
-        body.append(
-            f"\n  ⏳ {RATE_LIMIT_WAIT.format(seconds=seconds)}",
-            style="bold yellow",
+        from music_manager.ui.text import (  # noqa: PLC0415
+            RATE_LIMIT_REASON,
+            RATE_LIMIT_WAIT,
+            format_wait,
         )
+
+        wait = format_wait(seconds)
+        if reason:
+            msg = RATE_LIMIT_REASON.format(reason=reason, wait=wait)
+        else:
+            msg = RATE_LIMIT_WAIT.format(wait=wait)
+        body = RichText()
+        body.append(f"\n  ⏳ {msg}", style="bold yellow")
         self._set_body(body)
 
     def _complete_done(self, imported: int, failed: int, duration_ms: int = 0) -> None:

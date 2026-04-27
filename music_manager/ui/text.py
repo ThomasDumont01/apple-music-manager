@@ -267,7 +267,19 @@ COMPLETE_BACK = "Retour"
 
 HELP_COMPLETE = "↑↓  naviguer    espace  cocher/décocher    a  tout    ⏎  compléter"
 HELP_COMPLETE_PROGRESS = "  complétion en cours..."
-RATE_LIMIT_WAIT = "Limite YouTube atteinte — nouvel essai dans {seconds}s…"
+RATE_LIMIT_WAIT = "Limite YouTube atteinte — nouvel essai dans {wait}…"
+RATE_LIMIT_REASON = "{reason} — nouvel essai dans {wait}…"
+
+
+def format_wait(seconds: int) -> str:
+    """Format seconds into human-readable wait time (30s, 2min, 30min, 1h)."""
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f"{minutes}min"
+    hours = seconds // 3600
+    return f"{hours}h"
 
 # ── Identify labels ────────────────────────────────────────────────────────
 

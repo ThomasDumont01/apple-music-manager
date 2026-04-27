@@ -8,10 +8,12 @@ Adaptive throttle: detects YouTube rate limiting and backs off automatically.
 import glob
 import json
 import os
+import random
 import subprocess
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from music_manager.core.logger import log_event
 
@@ -21,26 +23,45 @@ _SEARCH_TIMEOUT = 30
 _DOWNLOAD_TIMEOUT = 120
 
 _MIN_SEARCH_INTERVAL = 12.0  # seconds between searches (~5/min)
-_BACKOFF_THRESHOLD_WARN = 3  # consecutive fails → short pause
-_BACKOFF_THRESHOLD_HARD = 5  # consecutive fails → long pause
-_BACKOFF_SHORT = 30  # seconds
-_BACKOFF_LONG = 120  # seconds
+_SEARCH_JITTER = 3.0  # ±3s on interval → 9-15s range
+
+_BACKOFF_BASE = 30  # starting backoff seconds
+_BACKOFF_MAX = 1800  # cap at 30 minutes
+_JITTER_FACTOR = 0.25  # ±25% jitter on backoff
+_RATE_LIMIT_BACKOFF = 1800  # "Sign in to confirm" → 30 min
+
+_RATE_LIMIT_PATTERNS = [
+    "sign in to confirm",
+    "http error 429",
+    "too many requests",
+    "confirm you're not a bot",
+]
+
+
+@dataclass
+class _SearchOutcome:
+    """Result of a single yt-dlp search invocation."""
+
+    candidates: list[dict] = field(default_factory=list)
+    is_rate_limited: bool = False
+    error: str = ""
+    returncode: int = 0
 
 # ── Rate limit state (module-level, thread-safe) ────────────────────────────
 
 _lock = threading.Lock()
 _consecutive_fails: int = 0
 _last_search_ts: float = 0.0
-_rate_limit_callback: Callable[[int], None] | None = None
+_rate_limit_callback: Callable[[int, str], None] | None = None
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
-def set_rate_limit_callback(callback: Callable[[int], None] | None) -> None:
+def set_rate_limit_callback(callback: Callable[[int, str], None] | None) -> None:
     """Register a callback invoked when rate limiting is detected.
 
-    The callback receives the number of seconds the throttle will wait.
+    The callback receives (seconds_to_wait, reason_message).
     Pass None to unregister.
     """
     global _rate_limit_callback  # noqa: PLW0603
@@ -63,32 +84,43 @@ def search_by_isrc(isrc: str) -> list[dict]:
 
     Each candidate: {id, title, url, duration, channel}.
     Applies adaptive throttle to avoid YouTube rate limiting.
+    Distinguishes "not found" (no backoff) from actual errors (exponential backoff).
     """
     if not isrc:
         return []
 
     _throttle_wait()
-    candidates = _do_search(isrc)
+    outcome = _do_search(isrc)
 
-    if candidates:
+    # Clean results → success, reset fail counter
+    if outcome.candidates:
         _record_success()
-        return candidates
+        return outcome.candidates
 
-    # No results — possible rate limit. Check if backoff needed.
-    backoff = _record_fail()
-    if backoff > 0:
-        # Rate limit detected — wait and retry once
-        _notify_rate_limit(backoff)
-        _sleep_backoff(backoff)
-        candidates = _do_search(isrc)
-        if candidates:
-            _record_success()
-            return candidates
-        # Still no results after retry — genuinely absent
-        log_event("youtube_search", isrc=isrc, results=0, retried=True, duration_ms=0)
+    # Clean search, 0 results, no error → track genuinely absent, no backoff
+    if not outcome.is_rate_limited and outcome.returncode == 0 and not outcome.error:
+        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0)
         return []
 
-    log_event("youtube_search", isrc=isrc, results=0, duration_ms=0)
+    # Rate-limit (captcha/bot) → long backoff, skip _record_fail
+    if outcome.is_rate_limited:
+        backoff = _RATE_LIMIT_BACKOFF
+        reason = outcome.error[:200] or "YouTube rate limit"
+    else:
+        # yt-dlp error → exponential backoff
+        backoff = _record_fail()
+        reason = outcome.error[:200] or "YouTube error"
+
+    _notify_rate_limit(backoff, reason)
+    _sleep_backoff(backoff)
+
+    # Retry once after backoff
+    retry = _do_search(isrc)
+    if retry.candidates:
+        _record_success()
+        return retry.candidates
+
+    log_event("youtube_search", isrc=isrc, results=0, retried=True, duration_ms=0)
     return []
 
 
@@ -163,8 +195,8 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
 # ── Private Functions ────────────────────────────────────────────────────────
 
 
-def _do_search(isrc: str) -> list[dict]:
-    """Execute a single yt-dlp search. Returns candidates list."""
+def _do_search(isrc: str) -> _SearchOutcome:
+    """Execute a single yt-dlp search. Returns outcome with error context."""
     t0 = time.monotonic()
     try:
         result = subprocess.run(
@@ -184,8 +216,29 @@ def _do_search(isrc: str) -> list[dict]:
     except subprocess.TimeoutExpired:
         duration_ms = int((time.monotonic() - t0) * 1000)
         log_event("youtube_search", isrc=isrc, results=0, duration_ms=duration_ms, timeout=True)
-        return []
+        return _SearchOutcome(error="timeout")
 
+    stderr = result.stderr.strip()
+
+    # Non-zero exit → check for rate-limit signals in stderr
+    if result.returncode != 0:
+        rate_limited = _detect_rate_limit(stderr)
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        log_event(
+            "youtube_search",
+            isrc=isrc,
+            results=0,
+            duration_ms=duration_ms,
+            error=stderr[:200],
+            rate_limited=rate_limited,
+        )
+        return _SearchOutcome(
+            is_rate_limited=rate_limited,
+            error=stderr[:200],
+            returncode=result.returncode,
+        )
+
+    # returncode == 0 → parse candidates
     candidates = []
     for line in result.stdout.strip().splitlines():
         try:
@@ -209,20 +262,18 @@ def _do_search(isrc: str) -> list[dict]:
     duration_ms = int((time.monotonic() - t0) * 1000)
     if candidates:
         log_event("youtube_search", isrc=isrc, results=len(candidates), duration_ms=duration_ms)
-    return candidates
+    return _SearchOutcome(candidates=candidates)
 
 
 def _throttle_wait() -> None:
-    """Enforce minimum interval between searches."""
+    """Enforce minimum interval between searches with jitter (9-15s)."""
     global _last_search_ts  # noqa: PLW0603
+    jittered = _MIN_SEARCH_INTERVAL + random.uniform(-_SEARCH_JITTER, _SEARCH_JITTER)
     with _lock:
         now = time.monotonic()
         elapsed = now - _last_search_ts
-        if _last_search_ts > 0 and elapsed < _MIN_SEARCH_INTERVAL:
-            wait = _MIN_SEARCH_INTERVAL - elapsed
-        else:
-            wait = 0
-        _last_search_ts = now + max(wait, 0)
+        wait = max(0, jittered - elapsed) if _last_search_ts > 0 else 0
+        _last_search_ts = now + wait
 
     if wait > 0:
         time.sleep(wait)
@@ -236,34 +287,37 @@ def _record_success() -> None:
 
 
 def _record_fail() -> int:
-    """Increment fail counter. Returns backoff seconds (0 = no backoff yet)."""
+    """Increment fail counter. Returns exponential backoff seconds with jitter."""
     global _consecutive_fails  # noqa: PLW0603
     with _lock:
         _consecutive_fails += 1
         fails = _consecutive_fails
 
-    if fails >= _BACKOFF_THRESHOLD_HARD:
-        backoff = _BACKOFF_LONG
-    elif fails >= _BACKOFF_THRESHOLD_WARN:
-        backoff = _BACKOFF_SHORT
-    else:
-        backoff = 0
-
-    if backoff > 0:
-        log_event(
-            "youtube_rate_limit",
-            consecutive_fails=fails,
-            backoff_seconds=backoff,
-        )
+    backoff = _compute_backoff(fails)
+    log_event("youtube_rate_limit", consecutive_fails=fails, backoff_seconds=backoff)
     return backoff
 
 
-def _notify_rate_limit(seconds: int) -> None:
+def _compute_backoff(fails: int) -> int:
+    """Exponential backoff: 30→60→120→…→1800 (cap) with ±25% jitter."""
+    raw = _BACKOFF_BASE * (2 ** (fails - 1))
+    capped = min(raw, _BACKOFF_MAX)
+    jitter = random.uniform(1 - _JITTER_FACTOR, 1 + _JITTER_FACTOR)
+    return int(capped * jitter)
+
+
+def _detect_rate_limit(stderr: str) -> bool:
+    """Check if stderr contains YouTube rate-limit signals."""
+    lower = stderr.lower()
+    return any(pattern in lower for pattern in _RATE_LIMIT_PATTERNS)
+
+
+def _notify_rate_limit(seconds: int, reason: str = "") -> None:
     """Notify UI callback about rate limit wait."""
     cb = _rate_limit_callback
     if cb:
         try:
-            cb(seconds)
+            cb(seconds, reason)
         except Exception:  # noqa: BLE001
             pass
 

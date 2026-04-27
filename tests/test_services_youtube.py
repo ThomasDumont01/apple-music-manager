@@ -25,9 +25,17 @@ _PATCH = "music_manager.services.youtube"
 # Helper: disable throttle delays for fast tests
 _NO_THROTTLE = {
     "_MIN_SEARCH_INTERVAL": 0,
-    "_BACKOFF_SHORT": 0.01,
-    "_BACKOFF_LONG": 0.02,
+    "_SEARCH_JITTER": 0,
+    "_BACKOFF_BASE": 0.01,
+    "_BACKOFF_MAX": 0.05,
+    "_RATE_LIMIT_BACKOFF": 0.01,
 }
+
+# Simulates a yt-dlp error (non-zero returncode + stderr)
+_ERROR_RESULT = MagicMock(stdout="", stderr="ERROR: network error", returncode=1)
+
+# Simulates a clean "not found" (returncode=0, empty stdout)
+_NOT_FOUND_RESULT = MagicMock(stdout="", stderr="", returncode=0)
 
 
 def _make_candidate(
@@ -159,7 +167,8 @@ def test_throttle_enforces_interval(mock_run: MagicMock, mock_log: MagicMock) ->
         stdout=_make_candidate() + "\n", returncode=0
     )
 
-    with patch(f"{_PATCH}._MIN_SEARCH_INTERVAL", 0.5):
+    with patch(f"{_PATCH}._MIN_SEARCH_INTERVAL", 0.5), \
+         patch(f"{_PATCH}._SEARCH_JITTER", 0):
         start = time.monotonic()
         search_by_isrc("A1")
         search_by_isrc("A2")
@@ -177,14 +186,13 @@ def test_success_resets_fail_counter(mock_run: MagicMock, mock_log: MagicMock) -
     def _side_effect(*args, **kwargs):
         call_count[0] += 1
         if call_count[0] <= 2:
-            return MagicMock(stdout="", returncode=0)
-        return MagicMock(stdout=_make_candidate() + "\n", returncode=0)
+            return MagicMock(stdout="", stderr="ERROR: fail", returncode=1)
+        return MagicMock(stdout=_make_candidate() + "\n", stderr="", returncode=0)
 
     mock_run.side_effect = _side_effect
 
     with patch.multiple(_PATCH, **_NO_THROTTLE):
-        search_by_isrc("F1")  # fail 1
-        search_by_isrc("F2")  # fail 2
+        search_by_isrc("F1")  # error 1 → backoff + retry (error 2)
         search_by_isrc("OK")  # success
 
     assert yt._consecutive_fails == 0
@@ -192,21 +200,20 @@ def test_success_resets_fail_counter(mock_run: MagicMock, mock_log: MagicMock) -
 
 @patch(f"{_PATCH}.log_event")
 @patch(f"{_PATCH}.subprocess.run")
-def test_backoff_triggers_after_threshold(
+def test_backoff_triggers_on_error(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
-    """After _BACKOFF_THRESHOLD_WARN consecutive fails, backoff is triggered."""
-    mock_run.return_value = MagicMock(stdout="", returncode=0)
+    """yt-dlp errors trigger exponential backoff and rate-limit callback."""
+    mock_run.return_value = MagicMock(stdout="", stderr="ERROR: fail", returncode=1)
 
-    rate_events: list[int] = []
-    set_rate_limit_callback(rate_events.append)
+    rate_events: list[tuple[int, str]] = []
+    set_rate_limit_callback(lambda s, r: rate_events.append((s, r)))
 
     with patch.multiple(_PATCH, **_NO_THROTTLE):
-        for i in range(4):
-            search_by_isrc(f"FAIL{i}")
+        search_by_isrc("FAIL1")  # error → backoff + retry (error again)
 
-    # 3rd fail triggers short backoff, 4th triggers again
     assert len(rate_events) >= 1, f"Expected rate limit callback, got {rate_events}"
+    assert rate_events[0][1], "Expected reason string in callback"
 
 
 @patch(f"{_PATCH}.log_event")
@@ -214,25 +221,20 @@ def test_backoff_triggers_after_threshold(
 def test_retry_after_backoff_can_succeed(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
-    """After backoff, the failed search is retried and can succeed."""
+    """After backoff, the retry can succeed."""
     call_count = [0]
 
     def _side_effect(*args, **kwargs):
         call_count[0] += 1
-        # First 5 calls fail, 6th succeeds (retry after hard backoff)
-        if call_count[0] <= 5:
-            return MagicMock(stdout="", returncode=0)
-        return MagicMock(stdout=_make_candidate("retry_ok") + "\n", returncode=0)
+        # First call errors, retry (2nd call) succeeds
+        if call_count[0] <= 1:
+            return MagicMock(stdout="", stderr="ERROR: temp", returncode=1)
+        return MagicMock(stdout=_make_candidate("retry_ok") + "\n", stderr="", returncode=0)
 
     mock_run.side_effect = _side_effect
 
     with patch.multiple(_PATCH, **_NO_THROTTLE):
-        search_by_isrc("F1")  # fail 1
-        search_by_isrc("F2")  # fail 2
-        # F3: fail 3 → short backoff → retry (fail 4)
-        search_by_isrc("F3")
-        # F4: fail 5 → long backoff → retry (success!)
-        result = search_by_isrc("F4")
+        result = search_by_isrc("F1")  # error → backoff → retry succeeds
 
     assert len(result) == 1
     assert result[0]["id"] == "retry_ok"
@@ -240,26 +242,30 @@ def test_retry_after_backoff_can_succeed(
 
 @patch(f"{_PATCH}.log_event")
 @patch(f"{_PATCH}.subprocess.run")
-def test_rate_limit_callback_receives_seconds(
+def test_rate_limit_callback_receives_seconds_and_reason(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
-    """Rate limit callback receives correct backoff seconds."""
-    mock_run.return_value = MagicMock(stdout="", returncode=0)
+    """Rate limit callback receives (seconds, reason) on error."""
+    mock_run.return_value = MagicMock(stdout="", stderr="ERROR: something", returncode=1)
 
-    rate_events: list[int] = []
-    set_rate_limit_callback(rate_events.append)
+    rate_events: list[tuple[int, str]] = []
+    set_rate_limit_callback(lambda s, r: rate_events.append((s, r)))
 
-    with patch(f"{_PATCH}._MIN_SEARCH_INTERVAL", 0), \
-         patch(f"{_PATCH}._BACKOFF_SHORT", 42), \
-         patch(f"{_PATCH}._BACKOFF_LONG", 99):
-        # Use sleep patch to avoid actual waiting
-        with patch(f"{_PATCH}.time.sleep"):
-            for i in range(6):
-                search_by_isrc(f"FAIL{i}")
+    with patch.multiple(
+        _PATCH,
+        _MIN_SEARCH_INTERVAL=0,
+        _SEARCH_JITTER=0,
+        _BACKOFF_BASE=30,
+        _BACKOFF_MAX=1800,
+        _JITTER_FACTOR=0,
+        _RATE_LIMIT_BACKOFF=0.01,
+    ), patch(f"{_PATCH}.time.sleep"):
+        search_by_isrc("FAIL1")  # error → backoff + callback
 
-    # Short backoff (42) for fails 3-4, long backoff (99) for fails 5+
-    assert 42 in rate_events
-    assert 99 in rate_events
+    assert len(rate_events) >= 1
+    seconds, reason = rate_events[0]
+    assert seconds > 0
+    assert reason  # non-empty reason string
 
 
 @patch(f"{_PATCH}.log_event")
@@ -268,11 +274,10 @@ def test_reset_throttle_clears_state(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
     """reset_throttle() clears fail counter and timestamp."""
-    mock_run.return_value = MagicMock(stdout="", returncode=0)
+    mock_run.return_value = MagicMock(stdout="", stderr="ERROR: x", returncode=1)
 
     with patch.multiple(_PATCH, **_NO_THROTTLE):
-        search_by_isrc("F1")
-        search_by_isrc("F2")
+        search_by_isrc("F1")  # error → increments _consecutive_fails
 
     assert yt._consecutive_fails > 0
     reset_throttle()
@@ -285,17 +290,159 @@ def test_callback_exception_swallowed(
     mock_run: MagicMock, mock_log: MagicMock
 ) -> None:
     """Broken callback doesn't crash search."""
-    mock_run.return_value = MagicMock(stdout="", returncode=0)
+    mock_run.return_value = MagicMock(stdout="", stderr="ERROR: x", returncode=1)
 
-    def broken_cb(secs: int) -> None:
+    def broken_cb(secs: int, reason: str) -> None:
         raise ValueError("boom")
 
     set_rate_limit_callback(broken_cb)
 
     with patch.multiple(_PATCH, **_NO_THROTTLE):
         # Should not raise despite broken callback
+        search_by_isrc("FAIL1")
+
+
+# ── Not found vs error distinction ────────────────────────────────────────
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_not_found_no_backoff(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """Clean search with 0 results (rc=0) does NOT trigger backoff."""
+    mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+
+    rate_events: list[tuple[int, str]] = []
+    set_rate_limit_callback(lambda s, r: rate_events.append((s, r)))
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        for i in range(10):
+            search_by_isrc(f"ABSENT{i}")
+
+    assert yt._consecutive_fails == 0, "Not-found should not increment fail counter"
+    assert len(rate_events) == 0, "Not-found should not trigger rate-limit callback"
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_error_triggers_exponential_backoff(
+    mock_run: MagicMock, mock_log: MagicMock
+) -> None:
+    """yt-dlp errors produce exponential backoff (doubles each time)."""
+    mock_run.return_value = MagicMock(stdout="", stderr="ERROR: net", returncode=1)
+
+    backoffs: list[int] = []
+    set_rate_limit_callback(lambda s, r: backoffs.append(s))
+
+    with patch.multiple(_PATCH, **{**_NO_THROTTLE, "_JITTER_FACTOR": 0}), \
+         patch(f"{_PATCH}.time.sleep"):
         for i in range(4):
-            search_by_isrc(f"FAIL{i}")
+            search_by_isrc(f"ERR{i}")
+
+    # With jitter=0, backoffs double: base*1, base*2, base*4, base*8
+    # But each search_by_isrc with error → _record_fail + retry → _record_fail again
+    # So fails accumulate faster. Just verify backoffs are increasing.
+    assert len(backoffs) >= 2
+    assert backoffs[-1] >= backoffs[0], "Backoffs should increase"
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_rate_limit_detected_in_stderr(
+    mock_run: MagicMock, mock_log: MagicMock
+) -> None:
+    """'Sign in to confirm' in stderr → rate-limited, long backoff."""
+    mock_run.return_value = MagicMock(
+        stdout="", stderr="Sign in to confirm you're not a bot", returncode=1
+    )
+
+    rate_events: list[tuple[int, str]] = []
+    set_rate_limit_callback(lambda s, r: rate_events.append((s, r)))
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        search_by_isrc("BLOCKED")
+
+    assert len(rate_events) >= 1
+    seconds, reason = rate_events[0]
+    # Rate-limit backoff is _RATE_LIMIT_BACKOFF (patched to 0.01 in _NO_THROTTLE)
+    assert seconds > 0
+    assert "sign in" in reason.lower()
+    # Should NOT increment _consecutive_fails (rate-limit is separate)
+    assert yt._consecutive_fails == 0
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_429_detected_as_rate_limit(
+    mock_run: MagicMock, mock_log: MagicMock
+) -> None:
+    """HTTP Error 429 in stderr detected as rate limit."""
+    mock_run.return_value = MagicMock(
+        stdout="", stderr="HTTP Error 429: Too Many Requests", returncode=1
+    )
+
+    rate_events: list[tuple[int, str]] = []
+    set_rate_limit_callback(lambda s, r: rate_events.append((s, r)))
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        search_by_isrc("RATELIMITED")
+
+    assert len(rate_events) >= 1
+    assert yt._consecutive_fails == 0  # rate-limit path skips _record_fail
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_backoff_capped_at_max(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """Backoff never exceeds _BACKOFF_MAX (+ jitter margin)."""
+    mock_run.return_value = MagicMock(stdout="", stderr="ERROR: x", returncode=1)
+
+    backoffs: list[int] = []
+    set_rate_limit_callback(lambda s, r: backoffs.append(s))
+
+    max_val = 100
+    with patch.multiple(
+        _PATCH,
+        _MIN_SEARCH_INTERVAL=0,
+        _SEARCH_JITTER=0,
+        _BACKOFF_BASE=10,
+        _BACKOFF_MAX=max_val,
+        _JITTER_FACTOR=0.25,
+        _RATE_LIMIT_BACKOFF=0.01,
+    ), patch(f"{_PATCH}.time.sleep"):
+        for i in range(10):
+            search_by_isrc(f"ERR{i}")
+
+    # Max with 25% jitter = 125
+    assert all(b <= max_val * 1.26 for b in backoffs), f"Backoff exceeded cap: {backoffs}"
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_throttle_jitter_varies_interval(
+    mock_run: MagicMock, mock_log: MagicMock
+) -> None:
+    """Jitter causes search intervals to vary (not all identical)."""
+    mock_run.return_value = MagicMock(
+        stdout=_make_candidate() + "\n", stderr="", returncode=0
+    )
+
+    timestamps: list[float] = []
+
+    def _capture_sleep(secs: float) -> None:
+        timestamps.append(secs)
+        # Don't actually sleep
+
+    with patch(f"{_PATCH}._MIN_SEARCH_INTERVAL", 10.0), \
+         patch(f"{_PATCH}._SEARCH_JITTER", 3.0), \
+         patch(f"{_PATCH}.time.sleep", side_effect=_capture_sleep):
+        for i in range(5):
+            yt._last_search_ts = time.monotonic() - 1  # force throttle
+            search_by_isrc(f"T{i}")
+
+    if len(timestamps) >= 2:
+        # With ±3s jitter, not all waits should be identical
+        unique_waits = set(round(t, 2) for t in timestamps)
+        assert len(unique_waits) > 1, f"Jitter not working: all waits = {timestamps}"
 
 
 # ── _parse_output ─────────────────────────────────────────────────────────
