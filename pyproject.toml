@@ -5,7 +5,7 @@ description = "Import tracks into Apple Music with HD artwork and official audio
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
-    "textual>=3.0",             # UI terminal
+    "textual>=8.2.5",           # UI terminal (>=8.2.5 pour thème ansi-dark)
     "mutagen>=1.47",            # tagging audio (M4A + MP3)
     "requests>=2.31",           # HTTP (Deezer, iTunes, covers)
     "rapidfuzz>=3.14.5",        # fuzzy matching

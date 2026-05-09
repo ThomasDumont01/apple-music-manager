@@ -22,7 +22,6 @@ class MusicApp(App):
 
     TITLE = "Music Manager"
     CSS_PATH = str(_CSS_PATH)
-    ansi_color = True
 
     def __init__(
         self,
