@@ -35,7 +35,7 @@ class MusicApp(App):
         playlists_dir: str = "",
     ) -> None:
         super().__init__()
-        self.theme = "textual-ansi"
+        self.theme = "ansi-dark"
         self.setup_done = setup_done
         self.tracks_store = tracks_store
         self.albums_store = albums_store
