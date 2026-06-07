@@ -783,6 +783,183 @@ def search_track(title: str, artist: str) -> list[dict]:
     return _search_deezer(title, artist)
 
 
+def resolve_by_isrc(isrc: str, albums_store: Albums) -> Track | None:
+    """Resolve a Track from a known-good ISRC. No title/artist validation.
+
+    Designed for the widget CLI where the ISRC was just picked from a Deezer
+    search the user explicitly confirmed. Returns ``None`` if Deezer can't
+    find the ISRC.
+    """
+    clean = (isrc or "").strip().upper()
+    if not clean:
+        return None
+    data = deezer_get(f"/track/isrc:{clean}")
+    if not data or "error" in data:
+        return None
+    album_id = data.get("album", {}).get("id", 0)
+    album_data = fetch_album_with_cover(album_id, albums_store)
+    return build_track(data, album_data)
+
+
+def search_deezer_free(query: str, limit: int = 10) -> list[dict]:
+    """Free-text Deezer search — no title/artist filtering.
+
+    Designed for the Übersicht widget where the user types a single string
+    ("billie eilish bad guy") and expects ranked matches. Returns raw Deezer
+    track dicts (each contains ``id``, ``title``, ``isrc``, ``preview``,
+    ``artist``, ``album``). Empty list on missing query or Deezer failure.
+    """
+    cleaned = (query or "").strip()
+    if not cleaned:
+        return []
+    capped = max(1, min(limit, 50))  # protect Deezer + our caches
+    encoded = urllib.parse.quote(cleaned)
+    data = deezer_get(f"/search/track?q={encoded}&limit={capped}")
+    if not data:
+        return []
+    raw = data.get("data", [])
+    return raw if isinstance(raw, list) else []
+
+
+def search_deezer_playlists(query: str, limit: int = 10) -> list[dict]:
+    """Free-text Deezer playlist search.
+
+    Designed for the Übersicht widget when the user toggles to "Playlists"
+    mode. Returns raw Deezer playlist dicts (``id``, ``title``, ``nb_tracks``,
+    ``picture_medium``, ``user`` …). Empty list on missing query or failure.
+    """
+    cleaned = (query or "").strip()
+    if not cleaned:
+        return []
+    capped = max(1, min(limit, 50))
+    encoded = urllib.parse.quote(cleaned)
+    data = deezer_get(f"/search/playlist?q={encoded}&limit={capped}")
+    if not data:
+        return []
+    raw = data.get("data", [])
+    return raw if isinstance(raw, list) else []
+
+
+def fetch_playlist_preview(playlist_id: int, max_tracks: int = 500) -> dict:
+    """Resolve a Deezer playlist into preview-ready track metadata.
+
+    Output shape::
+
+        {"name": str, "creator": str, "nb_tracks": int,
+         "tracks": [{"isrc": str, "title": str, "artist": str,
+                     "cover_url": str}, ...],
+         "skipped_no_isrc": int}
+
+    The playlist endpoint returns lite tracks (title/artist/cover always
+    present; ``isrc`` sometimes absent), so a ``/track/{id}`` hop is performed
+    when ISRC is missing. Tracks that ultimately have no ISRC are dropped
+    (counted in ``skipped_no_isrc``) so the preview only contains importable
+    items. Original playlist order preserved, ISRCs deduplicated (first wins).
+    ``max_tracks`` is a hard cap to protect against giant playlists.
+    """
+    if not playlist_id or playlist_id <= 0:
+        return _empty_playlist_preview()
+
+    meta = deezer_get(f"/playlist/{playlist_id}")
+    if not meta:
+        return _empty_playlist_preview()
+
+    name = str(meta.get("title") or "")
+    creator = str((meta.get("creator") or {}).get("name") or "")
+    nb_tracks = int(meta.get("nb_tracks") or 0)
+    cover_url = str(
+        meta.get("picture_xl")
+        or meta.get("picture_big")
+        or meta.get("picture_medium")
+        or meta.get("picture")
+        or ""
+    )
+
+    tracks: list[dict] = []
+    seen: set[str] = set()
+    skipped = 0
+    collected = 0
+    index = 0
+    page_size = 100
+
+    while collected < max_tracks:
+        page = deezer_get(
+            f"/playlist/{playlist_id}/tracks?index={index}&limit={page_size}"
+        )
+        if not page:
+            break
+        items = page.get("data") or []
+        if not isinstance(items, list) or not items:
+            break
+
+        for item in items:
+            if collected >= max_tracks:
+                break
+            collected += 1
+            entry = _build_playlist_track_entry(item)
+            if not entry["isrc"]:
+                skipped += 1
+                continue
+            if entry["isrc"] in seen:
+                continue
+            seen.add(entry["isrc"])
+            tracks.append(entry)
+
+        # Stop when Deezer signals no further page.
+        if not page.get("next"):
+            break
+        index += page_size
+
+    return {
+        "name": name,
+        "creator": creator,
+        "nb_tracks": nb_tracks,
+        "cover_url": cover_url,
+        "tracks": tracks,
+        "skipped_no_isrc": skipped,
+    }
+
+
+def _empty_playlist_preview() -> dict:
+    """Default empty shape returned by ``fetch_playlist_preview``."""
+    return {
+        "name": "",
+        "creator": "",
+        "nb_tracks": 0,
+        "cover_url": "",
+        "tracks": [],
+        "skipped_no_isrc": 0,
+    }
+
+
+def _build_playlist_track_entry(item: dict) -> dict:
+    """Project a Deezer playlist-track dict onto the preview schema."""
+    artist_obj = item.get("artist") or {}
+    album_obj = item.get("album") or {}
+    cover = album_obj.get("cover_medium") or album_obj.get("cover") or ""
+    return {
+        "isrc": _extract_isrc(item),
+        "title": str(item.get("title") or ""),
+        "artist": str(artist_obj.get("name") or ""),
+        "cover_url": str(cover),
+        "preview_url": str(item.get("preview") or ""),
+    }
+
+
+def _extract_isrc(track_item: dict) -> str:
+    """Return uppercase ISRC for a playlist track, with /track/{id} fallback."""
+    inline = str(track_item.get("isrc") or "").strip().upper()
+    if inline:
+        return inline
+    track_id = track_item.get("id") or 0
+    if not track_id:
+        return ""
+    full = deezer_get(f"/track/{track_id}")
+    if not full:
+        return ""
+    return str(full.get("isrc") or "").strip().upper()
+
+
 def search_editions(title: str, artist: str) -> list[dict]:
     """Search Deezer for alternative editions of a track (different ISRCs).
 

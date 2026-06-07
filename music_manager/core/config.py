@@ -71,6 +71,12 @@ class Paths:
         self.recommendations_path = os.path.join(data_dir, "recommendations.json")
         self.logs_path = os.path.join(data_dir, "logs.jsonl")
 
+        # Widget/CLI coordination — lives under config dir so it persists
+        # independently of the user-chosen data root.
+        self.ui_lock_path = os.path.join(CONFIG_DIR, ".ui.lock")
+        self.widget_lock_path = os.path.join(CONFIG_DIR, ".widget.lock")
+        self.widget_status_path = os.path.join(CONFIG_DIR, "widget_status.json")
+
         self.playlists_dir = os.path.join(data_root, "playlists")
         self.tmp_dir = os.path.join(data_root, ".tmp")
 

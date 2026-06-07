@@ -50,6 +50,8 @@ class MusicApp(App):
 
     def on_mount(self) -> None:
         """Start with welcome (first launch) or checks (subsequent)."""
+        self._acquire_ui_lock()
+
         if not self.setup_done:
             from music_manager.ui.screens.welcome import WelcomeScreen  # noqa: PLC0415
 
@@ -58,6 +60,31 @@ class MusicApp(App):
             from music_manager.ui.screens.checks import ChecksScreen  # noqa: PLC0415
 
             self.push_screen(ChecksScreen(first_launch=False))
+
+    def _acquire_ui_lock(self) -> None:
+        """Advertise that the Textual UI is running.
+
+        The widget CLI checks this lock file before importing in parallel —
+        avoids tracks.json/albums.json corruption. The release is bound to
+        process exit via atexit so a Ctrl+C also cleans up.
+        """
+        if self.paths is None:
+            return
+        try:
+            from music_manager.cli.lock import (  # noqa: PLC0415
+                acquire_lock,
+                release_lock,
+            )
+        except Exception:  # noqa: BLE001
+            return  # never break the UI for a coordination niceness
+        path = self.paths.ui_lock_path
+        try:
+            acquire_lock(path)
+        except OSError:
+            return
+        import atexit  # noqa: PLC0415
+
+        atexit.register(release_lock, path)
 
     def on_checks_done(self, first_launch: bool) -> None:
         """Checks passed — go to setup or menu."""

@@ -224,6 +224,70 @@ def set_artwork_batch(apple_ids: list[str], image_path: str) -> None:
     run_applescript(script)
 
 
+def apple_ids_exist(apple_ids: list[str]) -> set[str]:
+    """Return the subset of ``apple_ids`` that still exist in Apple Music.
+
+    Used by the widget CLI to detect orphaned ``tracks.json`` entries (tracks
+    the user deleted from the Apple Music app but that we didn't yet purge
+    from our store). A single AppleScript call walks the candidate IDs via
+    ``whose persistent ID is …`` which is fast for small lists.
+
+    Empty input returns an empty set without spawning a subprocess.
+    """
+    if not apple_ids:
+        return set()
+    id_list = ", ".join(f'"{_esc(aid)}"' for aid in apple_ids)
+    script = (
+        'tell application "Music"\n'
+        f"    set targetIds to {{{id_list}}}\n"
+        '    set output to ""\n'
+        "    repeat with tid in targetIds\n"
+        "        try\n"
+        "            set _t to first track of library playlist 1"
+        " whose persistent ID is (tid as string)\n"
+        '            set output to output & (tid as string) & linefeed\n'
+        "        end try\n"
+        "    end repeat\n"
+        "    return output\n"
+        "end tell"
+    )
+    result = run_applescript(script)
+    if not result:
+        return set()
+    return {line.strip() for line in result.split("\n") if line.strip()}
+
+
+def set_playlist_artwork(playlist_name: str, image_path: str) -> bool:
+    """Best-effort: set the artwork of a user playlist from an image file.
+
+    Apple Music's AppleScript surface for playlist artwork isn't fully
+    documented and behaviour shifts between macOS releases; callers must
+    treat a False return as "playlist exists but artwork couldn't be set"
+    rather than a hard error. The playlist itself is untouched on failure.
+    """
+    if not playlist_name or not image_path:
+        return False
+    abs_path = os.path.abspath(image_path)
+    if not os.path.isfile(abs_path):
+        return False
+    fmt = "«class PNG »" if abs_path.endswith(".png") else "«class JPEG»"
+    escaped_name = _esc(playlist_name)
+    script = (
+        'tell application "Music"\n'
+        f'    set p to user playlist "{escaped_name}"\n'
+        f'    set imgData to (read POSIX file "{_esc(abs_path)}" as {fmt})\n'
+        "    try\n"
+        "        delete artworks of p\n"
+        "    end try\n"
+        "    tell p\n"
+        "        make new artwork at end of artworks"
+        " with properties {data:imgData}\n"
+        "    end tell\n"
+        "end tell"
+    )
+    return run_applescript(script) is not None
+
+
 def get_playlist_membership(apple_id: str) -> list[tuple[str, list[str]]]:
     """Find which user playlists contain a track.
 

@@ -19,8 +19,31 @@ from music_manager.services.tracks import Tracks
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 
+_CLI_COMMANDS = frozenset(
+    {
+        "search",
+        "search-playlists",
+        "playlist-tracks",
+        "import-isrcs",
+        "import-status",
+        "play",
+        "play-playlist",
+        "shuffle",
+        "home",
+    }
+)
+
+
 def main() -> None:
-    """Launch Music Manager."""
+    """Launch Music Manager (or dispatch a CLI sub-command)."""
+    # ── CLI fast path (widget / scripts) ─────────────────
+    # Sub-commands skip the Textual UI entirely. Zero overhead for normal
+    # launches: the import below only runs when a sub-command was requested.
+    if len(sys.argv) > 1 and sys.argv[1] in _CLI_COMMANDS:
+        from music_manager.cli import dispatch  # noqa: PLC0415
+
+        sys.exit(dispatch(sys.argv[1:]))
+
     # ── Platform ─────────────────────────────────────────
     if not check_macos():
         sys.exit("Music Manager nécessite macOS.")

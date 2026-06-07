@@ -1,8 +1,13 @@
-"""Tests for ui/app.py — auto_sync logic."""
+"""Tests for ui/app.py — auto_sync logic + widget coordination lock."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
+from music_manager.cli.lock import release_lock
+from music_manager.core.config import Paths
 from music_manager.core.models import LibraryEntry
 from music_manager.services.albums import Albums
 from music_manager.services.apple import Apple
@@ -238,3 +243,35 @@ def test_auto_sync_baseline_includes_usage_stats(tmp_path: Path) -> None:
     assert entry["play_count"] == 3
     assert entry["added_date"] == "2026-01-01"
     assert entry["origin"] == "baseline"
+
+
+# ── UI lock for widget coordination ─────────────────────────────────────────
+
+
+def test_acquire_ui_lock_writes_pid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """on_mount → the .ui.lock file appears with our PID inside."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    monkeypatch.setattr("music_manager.core.config.CONFIG_DIR", str(config_dir))
+
+    data_root = tmp_path / "music"
+    data_root.mkdir()
+    paths = Paths(str(data_root))
+
+    app = MusicApp.__new__(MusicApp)
+    app.paths = paths
+    app._acquire_ui_lock()
+
+    lock_path = Path(paths.ui_lock_path)
+    assert lock_path.exists()
+    assert lock_path.read_text() == str(os.getpid())
+
+    # Clean up so subsequent tests don't see a stale lock.
+    release_lock(paths.ui_lock_path)
+
+
+def test_acquire_ui_lock_noop_when_no_paths() -> None:
+    """No data root configured yet → silently skip (don't crash the UI)."""
+    app = MusicApp.__new__(MusicApp)
+    app.paths = None
+    app._acquire_ui_lock()  # must not raise
