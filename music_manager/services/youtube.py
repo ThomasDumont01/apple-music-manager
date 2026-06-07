@@ -39,6 +39,13 @@ _RATE_LIMIT_PATTERNS = [
     "too many requests",
 ]
 
+# macOS TCC blocks access to the cookie file unless the terminal has Full Disk
+# Access. yt-dlp surfaces this as `Operation not permitted: …Cookies.binarycookies`.
+_TCC_BLOCKED_PATTERNS = [
+    "operation not permitted",
+    "cookies.binarycookies",
+]
+
 _SAFARI_COOKIES_PATH = os.path.expanduser("~/Library/Cookies/Cookies.binarycookies")
 
 
@@ -221,6 +228,8 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
         duration_ms = int((time.monotonic() - t0) * 1000)
         _cleanup_partial(output_dir)
         stderr = result.stderr.strip()
+        if _detect_tcc_blocked(stderr) and _use_cookies:
+            _auto_disable_cookies()
         log_event("youtube_download_failed", url=url, reason=stderr[:200], duration_ms=duration_ms)
         raise RuntimeError(f"yt-dlp error: {stderr}") from None
 
@@ -276,8 +285,13 @@ def _do_search(isrc: str) -> _SearchOutcome:
 
     # Non-zero exit → classify error
     if result.returncode != 0:
-        cookies_needed = _detect_cookies_needed(stderr)
-        rate_limited = not cookies_needed and _detect_rate_limit(stderr)
+        tcc_blocked = _detect_tcc_blocked(stderr)
+        if tcc_blocked and _use_cookies:
+            _auto_disable_cookies()
+        cookies_needed = not tcc_blocked and _detect_cookies_needed(stderr)
+        rate_limited = (
+            not tcc_blocked and not cookies_needed and _detect_rate_limit(stderr)
+        )
         duration_ms = int((time.monotonic() - t0) * 1000)
         log_event(
             "youtube_search",
@@ -373,6 +387,30 @@ def _detect_rate_limit(stderr: str) -> bool:
     """Check if stderr contains YouTube rate-limit signals (HTTP 429)."""
     lower = stderr.lower()
     return any(pattern in lower for pattern in _RATE_LIMIT_PATTERNS)
+
+
+def _detect_tcc_blocked(stderr: str) -> bool:
+    """Check if stderr indicates macOS TCC blocked the cookies file."""
+    lower = stderr.lower()
+    return all(pattern in lower for pattern in _TCC_BLOCKED_PATTERNS)
+
+
+def _auto_disable_cookies() -> None:
+    """Persist youtube_cookies=False and stop using cookies for this session.
+
+    Triggered when macOS TCC blocks the Safari cookie file. Re-enabling later
+    requires either granting Full Disk Access or accepting the next age-gate
+    prompt explicitly.
+    """
+    global _use_cookies, _cookies_decided  # noqa: PLW0603
+
+    _use_cookies = False
+    _cookies_decided = True  # avoid re-prompting in the same session
+
+    from music_manager.core.config import save_config  # noqa: PLC0415
+
+    save_config({"youtube_cookies": False})
+    log_event("youtube_cookies_auto_disabled", reason="tcc_blocked")
 
 
 def _handle_cookies_needed(isrc: str) -> list[dict]:

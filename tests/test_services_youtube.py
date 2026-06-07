@@ -373,6 +373,59 @@ def test_sign_in_detected_as_cookies_needed(
     assert yt._consecutive_fails == 0
 
 
+@patch("music_manager.core.config.save_config")
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_tcc_blocked_auto_disables_cookies(
+    mock_run: MagicMock, mock_log: MagicMock, mock_save: MagicMock
+) -> None:
+    """An 'Operation not permitted' on Cookies.binarycookies persists youtube_cookies=False.
+
+    Without this, the user gets stuck in a loop: prompt accepts cookies → flag persisted → next
+    launch tries cookies → TCC blocks → all yt-dlp calls fail. The auto-disable breaks the loop.
+    """
+    mock_run.return_value = MagicMock(
+        stdout="",
+        stderr=(
+            "ERROR: [Errno 1] Operation not permitted: "
+            "'/Users/thomas/Library/Cookies/Cookies.binarycookies'"
+        ),
+        returncode=1,
+    )
+    yt._use_cookies = True
+    yt._cookies_decided = True
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        result = search_by_isrc("BLOCKED_BY_TCC")
+
+    assert result == []
+    assert yt._use_cookies is False  # disabled in-memory
+    mock_save.assert_any_call({"youtube_cookies": False})  # persisted to config
+
+
+@patch("music_manager.core.config.save_config")
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_tcc_blocked_noop_when_cookies_already_off(
+    mock_run: MagicMock, mock_log: MagicMock, mock_save: MagicMock
+) -> None:
+    """If cookies are already off, the TCC error doesn't trigger a redundant save."""
+    mock_run.return_value = MagicMock(
+        stdout="",
+        stderr=(
+            "ERROR: [Errno 1] Operation not permitted: "
+            "'~/Library/Cookies/Cookies.binarycookies'"
+        ),
+        returncode=1,
+    )
+    yt._use_cookies = False
+
+    with patch.multiple(_PATCH, **_NO_THROTTLE):
+        search_by_isrc("ANY")
+
+    mock_save.assert_not_called()
+
+
 @patch(f"{_PATCH}.log_event")
 @patch(f"{_PATCH}.subprocess.run")
 def test_429_detected_as_rate_limit(
