@@ -86,6 +86,12 @@ class Track(_BaseEntry):
     csv_artist: str = ""
     csv_album: str = ""
 
+    # Usage stats (Apple Music — captured during library scan)
+    loved: bool = False
+    play_count: int = 0
+    last_played: str = ""  # ISO date
+    added_date: str = ""  # ISO date
+
 
 # ── Album (Deezer cache + iTunes cover) ──────────────────────────────────────
 
@@ -145,6 +151,12 @@ class LibraryEntry(_BaseEntry):
     has_artwork: bool = False
     isrc: str = ""
     file_path: str = ""
+
+    # Usage stats (Apple Music — captured during library scan)
+    loved: bool = False
+    play_count: int = 0
+    last_played: str = ""  # ISO date
+    added_date: str = ""  # ISO date
 
 
 # ── PendingTrack (blocked import, awaiting review) ─────────────────────────

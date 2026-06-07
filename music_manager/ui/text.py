@@ -13,6 +13,7 @@ TOOLS_ITEMS: list[tuple[str, str] | None] = [
     ("fix", "Corriger les métadonnées"),
     ("duplicates", "Trouver les doublons"),
     ("export", "Exporter une playlist"),
+    ("recommend", "Recommandations"),
     None,
     ("back", "Retour au menu principal"),
 ]
@@ -308,6 +309,57 @@ DUP_IGNORE = "Ignorer définitivement"
 DUP_REMOVING = "Suppression en cours..."
 
 HELP_DUP = "↑↓  naviguer    ⏎  garder    s  passer    p  écouter    esc  retour"
+
+# ── Recommendations labels ────────────────────────────────────────────────
+
+RECOMMEND_TITLE = "Recommandations"
+RECOMMEND_PLAYLIST_NAME = "for me"
+RECOMMEND_API_KEY_PROMPT = (
+    "Clé API Last.fm requise.\n"
+    "Crée-en une gratuitement sur https://www.last.fm/api\n"
+    "puis colle-la ici :"
+)
+RECOMMEND_API_KEY_INVALID = "Clé invalide. Vérifie et réessaie."
+RECOMMEND_SELECT_PROMPT = "Quel type de recommandations ?"
+RECOMMEND_MODE_GENERAL = "Tout style (basé sur tes goûts)"
+RECOMMEND_MODE_GENRE = "Cibler un genre"
+RECOMMEND_MODE_MOOD = "Cibler un mood"
+RECOMMEND_NO_GENRES = "Pas assez de genres dans ta bibliothèque."
+RECOMMEND_GENRE_PROMPT = "Choisis un genre :"
+RECOMMEND_MOOD_PROMPT = "Choisis un mood :"
+RECOMMEND_COUNT_PROMPT = "Combien de recommandations ?"
+RECOMMEND_COUNTS: list[tuple[int, str]] = [
+    (10, "10  — rapide (~30 s)"),
+    (20, "20  — équilibré (~1 min)"),
+    (30, "30  — plus de matière (~2 min)"),
+    (50, "50  — grande exploration (~3-4 min)"),
+]
+RECOMMEND_MOODS: list[tuple[str, str]] = [
+    ("chill", "Chill — apaisant"),
+    ("energetic", "Énergique — boost"),
+    ("melancholic", "Mélancolique — introspectif"),
+    ("romantic", "Romantique — tendre"),
+    ("party", "Party — pour danser"),
+    ("focus", "Focus — pour bosser"),
+]
+RECOMMEND_SCAN_RUNNING = "Détection des recommandations supprimées..."
+RECOMMEND_SCAN_RESULT = "{count} ancienne(s) recommandation(s) supprimée(s) — blacklistée(s)."
+RECOMMEND_GENERATING = "Recherche de recommandations sur Last.fm..."
+RECOMMEND_RESOLVING = "Recherche sur Deezer..."
+RECOMMEND_IMPORTING_PROGRESS = "Import {current}/{total}..."
+RECOMMEND_DONE_TITLE = "Recommandations ajoutées"
+RECOMMEND_DONE_SUMMARY = (
+    "{imported} ajoutée(s) à la playlist « for me ».\n"
+    "{failed} échouée(s) — {blacklist} blacklistée(s) ignorée(s)."
+)
+RECOMMEND_ERROR_NO_KEY = "Aucune clé Last.fm configurée."
+RECOMMEND_ERROR_EMPTY = "Last.fm n'a renvoyé aucune piste. Réessaie plus tard."
+RECOMMEND_ERROR_GENERIC = "Erreur : {message}"
+
+HELP_RECOMMEND = "↑↓  naviguer    ⏎  valider    esc  retour"
+HELP_RECOMMEND_API_KEY = "⏎  valider    esc  retour"
+HELP_RECOMMEND_RUNNING = "  recommandations en cours..."
+HELP_RECOMMEND_DONE = "⏎  retour au menu"
 
 # ── Checks screen ──────────────────────────────────────────────────────────
 

@@ -14,6 +14,7 @@ from music_manager.ui.screens._import import ImportMixin
 from music_manager.ui.screens._maintenance import MaintenanceMixin
 from music_manager.ui.screens._modify import ModifyMixin
 from music_manager.ui.screens._preview import PreviewMixin
+from music_manager.ui.screens._recommendations import RecommendationsMixin
 from music_manager.ui.screens._review import ReviewMixin
 
 
@@ -28,6 +29,7 @@ class MenuScreen(
     ExportMixin,
     MaintenanceMixin,
     PreviewMixin,
+    RecommendationsMixin,
     MenuScreenCore,
 ):
     """Single screen: menu + all features via mixins."""

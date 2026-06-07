@@ -24,6 +24,7 @@ from music_manager.core.models import PendingTrack, Track
 from music_manager.options.import_tracks import ImportResult
 from music_manager.options.modify_track import AlbumMatch, TrackMatch
 from music_manager.services.albums import Albums
+from music_manager.services.recommendations_store import RecommendationsStore
 from music_manager.services.tracks import Tracks
 from music_manager.ui.render import (
     render_batch_decision,
@@ -97,6 +98,7 @@ class MenuScreenCore(_Base):
         identified_count: int = 0,
         tracks_store: Tracks | None = None,
         albums_store: Albums | None = None,
+        recs_store: RecommendationsStore | None = None,
         paths: Paths | None = None,
         requests_path: str = "",
         playlists_dir: str = "",
@@ -107,6 +109,7 @@ class MenuScreenCore(_Base):
         self._identified_count = identified_count
         self._tracks_store = tracks_store
         self._albums_store = albums_store
+        self._recs_store = recs_store
         self._paths = paths
         self._requests_path = requests_path
         self._playlists_dir = playlists_dir
@@ -188,6 +191,12 @@ class MenuScreenCore(_Base):
         self._identify_album_idx = 0
         self._identify_apple_ids: list[str] = []
         self._identify_best_edition: int = 0
+
+        # Recommendations state
+        self._recommend_mode: str = "general"
+        self._recommend_count: int = 20
+        self._recommend_running: bool = False
+        self._recommend_result: object = None
 
         # Modify track state
         self._modify_track_items: list[tuple[str, str, str]] = []  # (label, suffix, apple_id)
@@ -597,6 +606,15 @@ class MenuScreenCore(_Base):
                 pass
             self._preview_proc = None
 
+        if self._view in ("recommend_done", "recommend_error"):
+            self._switch_view("tools")
+            return
+        if self._view in (
+            "recommend_scanning",
+            "recommend_generating",
+            "recommend_importing",
+        ):
+            return  # cannot interrupt a running generation
         if self._view == "duplicates":
             self._dup_select()
             return
@@ -692,6 +710,24 @@ class MenuScreenCore(_Base):
             self._start_modify()
         elif key == "identify":
             self._start_identify()
+        elif key == "recommend":
+            self._start_recommendations()
+        elif key == "recommend_general":
+            self._on_recommend_mode_selected("general")
+        elif key == "recommend_genre":
+            self._show_genre_selector()
+        elif key == "recommend_mood":
+            self._show_mood_selector()
+        elif key.startswith("recommend_genre:"):
+            self._on_recommend_mode_selected(f"genre:{key.split(':', 1)[1]}")
+        elif key.startswith("recommend_mood:"):
+            self._on_recommend_mode_selected(f"mood:{key.split(':', 1)[1]}")
+        elif key.startswith("recommend_count:"):
+            try:
+                count = int(key.split(":", 1)[1])
+            except ValueError:
+                count = 20
+            self._on_recommend_count_selected(count)
         elif key in (
             "snapshot",
             "reset_failed",
@@ -911,6 +947,33 @@ class MenuScreenCore(_Base):
         elif self._view == "modify_done":
             self._modify_cursor = 0
             self._show_modify_actions()
+        elif self._view in (
+            "recommend_select_genre",
+            "recommend_select_mood",
+            "recommend_select_count",
+        ):
+            self._show_mode_selector()
+            return
+        elif self._view == "recommend_api_key":
+            input_w = self.query_one("#menu-input", Input)
+            input_w.display = False
+            input_w.disabled = True
+            input_w.value = ""
+            self._switch_view("tools")
+            return
+        elif self._view in (
+            "recommend_select_mode",
+            "recommend_done",
+            "recommend_error",
+        ):
+            self._switch_view("tools")
+            return
+        elif self._view in (
+            "recommend_scanning",
+            "recommend_generating",
+            "recommend_importing",
+        ):
+            return  # cannot cancel a running generation
         else:
             self._import_queue = []
             self._switch_view(self._return_to)

@@ -13,6 +13,7 @@ from music_manager.core.logger import init_logger
 from music_manager.core.setup import choose_data_root, create_data_folders
 from music_manager.services.albums import Albums
 from music_manager.services.apple import Apple
+from music_manager.services.recommendations_store import RecommendationsStore
 from music_manager.services.tracks import Tracks
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -70,6 +71,9 @@ def main() -> None:
     apple = Apple()
     tracks = Tracks(paths.tracks_path) if config["setup_done"] else None
     albums = Albums(paths.albums_path) if config["setup_done"] else None
+    recs = (
+        RecommendationsStore(paths.recommendations_path) if config["setup_done"] else None
+    )
 
     # ── Launch Textual UI ────────────────────────────────
     from music_manager.ui.app import MusicApp  # noqa: PLC0415
@@ -78,6 +82,7 @@ def main() -> None:
         setup_done=bool(config["setup_done"]),
         tracks_store=tracks,
         albums_store=albums,
+        recs_store=recs,
         paths=paths,
         apple=apple,
         requests_path=paths.requests_path,

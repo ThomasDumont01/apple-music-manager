@@ -163,3 +163,78 @@ def test_auto_sync_updates_file_path(tmp_path: Path) -> None:
     app._auto_sync(apple, tracks)
 
     assert tracks.all()["A1"]["file_path"] == "/new/path/song.m4a"
+
+
+def test_auto_sync_propagates_usage_stats(tmp_path: Path) -> None:
+    """_auto_sync propagates loved/play_count/dates from Apple scan onto stored entries."""
+    app = MusicApp.__new__(MusicApp)
+    app.albums_store = None
+    app.paths = None
+
+    tracks = Tracks(str(tmp_path / "tracks.json"))
+    tracks.add(
+        "A1",
+        {
+            "title": "Song",
+            "artist": "Art",
+            "isrc": "X1",
+            "deezer_id": 1,
+            "loved": False,
+            "play_count": 0,
+        },
+    )
+    tracks.save()
+
+    apple = MagicMock()
+    apple.get_all.return_value = {
+        "A1": LibraryEntry(
+            apple_id="A1",
+            title="Song",
+            artist="Art",
+            album="Al",
+            loved=True,
+            play_count=17,
+            last_played="2025-12-01",
+            added_date="2024-06-15",
+        ),
+    }
+
+    app._auto_sync(apple, tracks)
+
+    entry = tracks.all()["A1"]
+    assert entry["loved"] is True
+    assert entry["play_count"] == 17
+    assert entry["last_played"] == "2025-12-01"
+    assert entry["added_date"] == "2024-06-15"
+    # Deezer enrichment must NOT be overwritten
+    assert entry["deezer_id"] == 1
+    assert entry["isrc"] == "X1"
+
+
+def test_auto_sync_baseline_includes_usage_stats(tmp_path: Path) -> None:
+    """New baseline tracks carry the freshly captured stats."""
+    app = MusicApp.__new__(MusicApp)
+    app.albums_store = None
+    app.paths = None
+
+    tracks = Tracks(str(tmp_path / "tracks.json"))
+    apple = MagicMock()
+    apple.get_all.return_value = {
+        "AP_NEW": LibraryEntry(
+            apple_id="AP_NEW",
+            title="Fresh",
+            artist="Art",
+            album="Al",
+            loved=True,
+            play_count=3,
+            added_date="2026-01-01",
+        ),
+    }
+
+    app._auto_sync(apple, tracks)
+
+    entry = tracks.all()["AP_NEW"]
+    assert entry["loved"] is True
+    assert entry["play_count"] == 3
+    assert entry["added_date"] == "2026-01-01"
+    assert entry["origin"] == "baseline"

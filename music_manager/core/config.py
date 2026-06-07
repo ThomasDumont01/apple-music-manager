@@ -20,6 +20,7 @@ _DEFAULTS = {
     "install_id": "",
     "telemetry_consent": True,
     "youtube_cookies": False,
+    "lastfm_api_key": "",
 }
 
 
@@ -67,6 +68,7 @@ class Paths:
         self.tracks_path = os.path.join(data_dir, "tracks.json")
         self.albums_path = os.path.join(data_dir, "albums.json")
         self.preferences_path = os.path.join(data_dir, "preferences.json")
+        self.recommendations_path = os.path.join(data_dir, "recommendations.json")
         self.logs_path = os.path.join(data_dir, "logs.jsonl")
 
         self.playlists_dir = os.path.join(data_root, "playlists")

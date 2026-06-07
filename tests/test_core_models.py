@@ -52,6 +52,31 @@ def test_library_entry_fields():
     assert e.has_artwork is False
     assert e.file_path == ""
     assert e.isrc == ""
+    # Usage stats default to "no signal"
+    assert e.loved is False
+    assert e.play_count == 0
+    assert e.last_played == ""
+    assert e.added_date == ""
+
+
+def test_library_entry_usage_stats_roundtrip():
+    """Usage stats survive to_dict / from_dict roundtrip."""
+
+    e = LibraryEntry(
+        apple_id="X",
+        title="T",
+        artist="A",
+        album="Al",
+        loved=True,
+        play_count=42,
+        last_played="2025-12-01 10:00:00 +0000",
+        added_date="2024-06-15 09:30:00 +0000",
+    )
+    restored = LibraryEntry.from_dict(e.to_dict())
+    assert restored.loved is True
+    assert restored.play_count == 42
+    assert restored.last_played == "2025-12-01 10:00:00 +0000"
+    assert restored.added_date == "2024-06-15 09:30:00 +0000"
 
 
 def test_library_entry_to_dict():
@@ -118,3 +143,33 @@ def test_track_to_dict_roundtrip():
     assert d["deezer_id"] == 123
     assert d["explicit"] is True
     assert d["isrc"] == "ISRC123"
+
+
+def test_track_usage_stats_defaults():
+    """Track usage stats default to neutral values."""
+
+    t = Track(isrc="X", title="T", artist="A", album="Al")
+    assert t.loved is False
+    assert t.play_count == 0
+    assert t.last_played == ""
+    assert t.added_date == ""
+
+
+def test_track_usage_stats_roundtrip():
+    """Track usage stats survive to_dict / from_dict roundtrip."""
+
+    t = Track(
+        isrc="X",
+        title="T",
+        artist="A",
+        album="Al",
+        loved=True,
+        play_count=128,
+        last_played="2025-11-20",
+        added_date="2024-01-01",
+    )
+    restored = Track.from_dict(t.to_dict())
+    assert restored.loved is True
+    assert restored.play_count == 128
+    assert restored.last_played == "2025-11-20"
+    assert restored.added_date == "2024-01-01"

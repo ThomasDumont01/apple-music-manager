@@ -7,6 +7,7 @@ from textual.app import App
 from music_manager.core.config import Paths
 from music_manager.services.albums import Albums
 from music_manager.services.apple import Apple
+from music_manager.services.recommendations_store import RecommendationsStore
 from music_manager.services.tracks import Tracks
 
 # ── Constants ───────────────────────────────────────────────────────────────
@@ -32,12 +33,14 @@ class MusicApp(App):
         apple: Apple | None = None,
         requests_path: str = "",
         playlists_dir: str = "",
+        recs_store: RecommendationsStore | None = None,
     ) -> None:
         super().__init__()
         self.theme = "ansi-dark"
         self.setup_done = setup_done
         self.tracks_store = tracks_store
         self.albums_store = albums_store
+        self.recs_store = recs_store
         self.paths = paths
         self.apple = apple
         self.requests_path = requests_path
@@ -71,6 +74,7 @@ class MusicApp(App):
         if self.paths:
             self.tracks_store = Tracks(self.paths.tracks_path)
             self.albums_store = Albums(self.paths.albums_path)
+            self.recs_store = RecommendationsStore(self.paths.recommendations_path)
         self._launch_menu(tracks_total, isrc_count)
 
     def _launch_menu_with_background_scan(self) -> None:
@@ -97,6 +101,9 @@ class MusicApp(App):
         """Push MenuScreen with current stats."""
         from music_manager.ui.screens.menu import MenuScreen  # noqa: PLC0415
 
+        if self.recs_store is None and self.paths is not None:
+            self.recs_store = RecommendationsStore(self.paths.recommendations_path)
+
         self.switch_screen(
             MenuScreen(
                 tracks_count=tracks_count,
@@ -104,6 +111,7 @@ class MusicApp(App):
                 identified_count=identified_count,
                 tracks_store=self.tracks_store,
                 albums_store=self.albums_store,
+                recs_store=self.recs_store,
                 paths=self.paths,
                 requests_path=self.requests_path,
                 playlists_dir=self.playlists_dir,
@@ -131,13 +139,22 @@ class MusicApp(App):
         for apple_id in tracked_ids - library_ids:
             tracks.remove(apple_id)
 
-        # Sync file_path from Apple scan (Apple renames files on metadata changes)
+        # Sync file_path + usage stats from Apple scan
+        # (Apple renames files on metadata changes; stats change as the user listens)
+        stat_fields = ("loved", "play_count", "last_played", "added_date")
         for apple_id in tracked_ids & library_ids:
             lib_entry = library[apple_id]
             stored = tracks.all().get(apple_id)
-            if stored and lib_entry.file_path and stored.get("file_path") != lib_entry.file_path:
+            if not stored:
+                continue
+            if lib_entry.file_path and stored.get("file_path") != lib_entry.file_path:
                 stored["file_path"] = lib_entry.file_path
                 tracks.mark_dirty()
+            for stat in stat_fields:
+                lib_value = getattr(lib_entry, stat)
+                if stored.get(stat) != lib_value:
+                    stored[stat] = lib_value
+                    tracks.mark_dirty()
 
         tracks.save()
 

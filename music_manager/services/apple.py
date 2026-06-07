@@ -520,6 +520,9 @@ def _scan_itunes_library(
         location = item.location()
         apple_id = format(item.persistentID(), "016X")  # 16-char hex, matches AppleScript
 
+        last_played_date = item.lastPlayedDate()
+        added_date = item.addedDate()
+
         result[apple_id] = LibraryEntry(
             apple_id=apple_id,
             title=str(item.title() or ""),
@@ -535,6 +538,10 @@ def _scan_itunes_library(
             explicit=bool(item.lyricsContentRating()),
             has_artwork=bool(item.hasArtworkAvailable()),
             file_path=str(location.path()) if location else "",
+            loved=bool(item.isLoved()) if hasattr(item, "isLoved") else False,
+            play_count=int(item.playCount() or 0),
+            last_played=str(last_played_date.description()) if last_played_date else "",
+            added_date=str(added_date.description()) if added_date else "",
         )
 
         if on_progress and index % 50 == 0:

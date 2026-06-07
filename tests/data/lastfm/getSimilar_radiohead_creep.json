@@ -1,0 +1,39 @@
+{
+  "similartracks": {
+    "track": [
+      {
+        "name": "Karma Police",
+        "playcount": 12345,
+        "mbid": "abcd-1234",
+        "match": "0.95",
+        "artist": {
+          "name": "Radiohead",
+          "mbid": "a74b1b7f-71a5-4011-9441-d0b5e4122711"
+        }
+      },
+      {
+        "name": "Wonderwall",
+        "playcount": 9000,
+        "mbid": "efgh-5678",
+        "match": "0.81",
+        "artist": {
+          "name": "Oasis",
+          "mbid": "39ab1aed-75e0-4140-bd47-540276886b60"
+        }
+      },
+      {
+        "name": "Bittersweet Symphony",
+        "playcount": 7000,
+        "mbid": "",
+        "match": "0.74",
+        "artist": {
+          "name": "The Verve",
+          "mbid": ""
+        }
+      }
+    ],
+    "@attr": {
+      "artist": "Radiohead"
+    }
+  }
+}

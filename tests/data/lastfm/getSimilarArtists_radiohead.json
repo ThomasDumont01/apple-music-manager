@@ -1,0 +1,8 @@
+{
+  "similarartists": {
+    "artist": [
+      {"name": "Muse", "mbid": "muse-1", "match": "0.72"},
+      {"name": "Coldplay", "mbid": "coldplay-1", "match": "0.65"}
+    ]
+  }
+}

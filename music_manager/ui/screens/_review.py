@@ -528,6 +528,11 @@ class ReviewMixin(_MixinBase):
         """Handle submissions from Input widget."""
         value = event.value.strip()
 
+        # Recommendations: API key entry
+        if self._view == "recommend_api_key":
+            self._on_recommend_api_key_submitted(value)
+            return
+
         # Modify: metadata field edit or YouTube URL
         if self._view == "modify_meta_edit":
             if self._modify_editing_field == "__youtube_url__":

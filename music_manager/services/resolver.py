@@ -774,6 +774,15 @@ def resolve_by_id(deezer_id: int, albums_store: Albums) -> Track | None:
     return build_track(data, album_data)
 
 
+def search_track(title: str, artist: str) -> list[dict]:
+    """Search Deezer for a single track. Returns the filtered list (may be empty).
+
+    Public wrapper around the internal `_search_deezer` so external pipelines
+    (recommendations, etc.) don't reach into private symbols.
+    """
+    return _search_deezer(title, artist)
+
+
 def search_editions(title: str, artist: str) -> list[dict]:
     """Search Deezer for alternative editions of a track (different ISRCs).
 

@@ -1,0 +1,31 @@
+{
+  "tracks": {
+    "track": [
+      {
+        "name": "Weightless",
+        "duration": "480",
+        "mbid": "weightless-1",
+        "artist": {
+          "name": "Marconi Union",
+          "mbid": "marconi-1"
+        }
+      },
+      {
+        "name": "Saturn",
+        "duration": "240",
+        "mbid": "saturn-1",
+        "artist": {
+          "name": "Sleeping At Last",
+          "mbid": ""
+        }
+      }
+    ],
+    "@attr": {
+      "tag": "chill",
+      "page": "1",
+      "perPage": "50",
+      "totalPages": "1000",
+      "total": "50000"
+    }
+  }
+}
