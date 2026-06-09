@@ -490,3 +490,53 @@ class TestBuildTrack:
 
         track = resolver.build_track(deezer_data, self._full_album_data())
         assert track.explicit is False
+
+
+# ── download_cover_file ──────────────────────────────────────────────────────
+
+
+class TestDownloadCoverFile:
+    """download_cover_file: defensive download for cover URLs."""
+
+    def test_empty_url_returns_empty(self, tmp_path):
+        """No URL → empty string, no HTTP call."""
+        assert resolver.download_cover_file("", str(tmp_path), "cov") == ""
+
+    def test_success_writes_file(self, tmp_path):
+        """200 response writes bytes to tmp_dir/name.jpg."""
+        resp = MagicMock(spec=requests.Response)
+        resp.status_code = 200
+        resp.content = b"\xff\xd8\xff\xe0fakejpeg"
+        resp.headers = {"content-type": "image/jpeg"}
+        resp.raise_for_status = MagicMock()
+
+        with patch.object(resolver._SESSION, "get", return_value=resp):
+            path = resolver.download_cover_file("http://x/cover.jpg", str(tmp_path), "cov")
+
+        assert path.endswith("cov.jpg")
+        with open(path, "rb") as fh:
+            assert fh.read() == b"\xff\xd8\xff\xe0fakejpeg"
+
+    def test_http_error_returns_empty(self, tmp_path):
+        """403/404 raises HTTPError → caught, returns empty (no crash)."""
+        resp = MagicMock(spec=requests.Response)
+        resp.status_code = 403
+        resp.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+
+        with patch.object(resolver._SESSION, "get", return_value=resp):
+            result = resolver.download_cover_file("http://x/forbidden.jpg", str(tmp_path), "cov")
+        assert result == ""
+
+    def test_connection_error_returns_empty(self, tmp_path):
+        """ConnectionError caught → empty string."""
+        with patch.object(
+            resolver._SESSION, "get", side_effect=requests.ConnectionError("boom")
+        ):
+            result = resolver.download_cover_file("http://x/c.jpg", str(tmp_path), "cov")
+        assert result == ""
+
+    def test_timeout_returns_empty(self, tmp_path):
+        """Timeout caught → empty string."""
+        with patch.object(resolver._SESSION, "get", side_effect=requests.Timeout("slow")):
+            result = resolver.download_cover_file("http://x/c.jpg", str(tmp_path), "cov")
+        assert result == ""

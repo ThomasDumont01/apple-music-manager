@@ -1133,7 +1133,7 @@ def download_cover_file(cover_url: str, tmp_dir: str, name: str = "modify") -> s
         with open(path, "wb") as fh:
             fh.write(response.content)
         return path
-    except (requests.ConnectionError, requests.Timeout, OSError):
+    except (requests.ConnectionError, requests.Timeout, requests.HTTPError, OSError):
         return ""
 
 

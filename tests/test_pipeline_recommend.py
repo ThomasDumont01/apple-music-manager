@@ -1458,3 +1458,92 @@ def test_generate_mood_uses_tag_top_tracks(stores, paths, with_api_key) -> None:
         )
     tag_mock.assert_called_once()
     similar_mock.assert_not_called()
+
+
+def test_generate_calls_cleanup_covers_after_import(stores, paths, with_api_key) -> None:
+    """After import loop, .tmp/cover_*.jpg leftovers must be cleaned up.
+
+    Regression: cleanup_covers() was missing from pipeline/recommend.py,
+    causing disk leak as cover files accumulated over each generation run.
+    """
+    tracks, albums, recs = stores
+    _seed_loved(tracks, "SEED1", "Song", "Artist")
+
+    similar = [{"name": "T", "artist": "A", "mbid": "", "match": 0.9}]
+    deezer = [_deezer_match("REC1", "T", "A")]
+
+    def fake_import(track, *_args, **_kwargs):
+        track.apple_id = "AP_NEW1"
+        return None
+
+    with (
+        patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
+        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch(
+            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
+        ),
+        patch(
+            "music_manager.pipeline.recommend.import_resolved_track",
+            side_effect=fake_import,
+        ),
+        patch(
+            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
+        ),
+        patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
+        patch(
+            "music_manager.pipeline.recommend.cleanup_covers"
+        ) as mock_cleanup,
+    ):
+        result = recommend.generate_recommendations(
+            mode="general",
+            paths=paths,
+            tracks_store=tracks,
+            albums_store=albums,
+            recs_store=recs,
+        )
+
+    assert result.imported == 1
+    mock_cleanup.assert_called_once_with(paths.tmp_dir)
+
+
+def test_generate_cleanup_called_even_when_nothing_imported(
+    stores, paths, with_api_key
+) -> None:
+    """Cleanup must run even after a 0-import batch (failed imports left files)."""
+    tracks, albums, recs = stores
+    _seed_loved(tracks, "SEED1", "Song", "Artist")
+
+    similar = [{"name": "T", "artist": "A", "mbid": "", "match": 0.9}]
+    deezer = [_deezer_match("REC1", "T", "A")]
+
+    with (
+        patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
+        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch(
+            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
+        ),
+        patch(
+            "music_manager.pipeline.recommend.import_resolved_track",
+            return_value=object(),  # truthy → counted as failed
+        ),
+        patch(
+            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
+        ),
+        patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
+        patch(
+            "music_manager.pipeline.recommend.cleanup_covers"
+        ) as mock_cleanup,
+    ):
+        recommend.generate_recommendations(
+            mode="general",
+            paths=paths,
+            tracks_store=tracks,
+            albums_store=albums,
+            recs_store=recs,
+        )
+
+    mock_cleanup.assert_called_once_with(paths.tmp_dir)

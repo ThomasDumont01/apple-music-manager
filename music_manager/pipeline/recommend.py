@@ -47,7 +47,7 @@ from music_manager.core.logger import log_event
 from music_manager.core.models import Track
 from music_manager.core.profile import Profile, build_profile
 from music_manager.pipeline.dedup import is_duplicate
-from music_manager.pipeline.importer import import_resolved_track
+from music_manager.pipeline.importer import cleanup_covers, import_resolved_track
 from music_manager.services import apple, lastfm
 from music_manager.services.albums import Albums
 from music_manager.services.recommendations_store import RecommendationsStore
@@ -282,6 +282,10 @@ def generate_recommendations(
             result.failed += 1
         if on_progress:
             on_progress("import", idx, len(top))
+
+    # Cleanup downloaded cover files now that all imports finished
+    # (each cover_<album_id>.jpg in tmp_dir is ~150KB — accumulates otherwise).
+    cleanup_covers(paths.tmp_dir)
 
     # H. Playlist sync — into the ``for me`` folder. We warn loudly when a
     # user playlist already bears the folder name (creating the folder would
