@@ -137,11 +137,16 @@ def _playlists(limit: int) -> list[dict]:
     widget can build a URL like ``url("music-manager.assets/abc.jpg")``.
     """
     try:
+        from music_manager.services.apple import (  # noqa: PLC0415
+            RECO_FOLDER_NAME,
+        )
         from music_manager.services.playlist_covers import (  # noqa: PLC0415
             list_playlists_with_covers,
         )
 
-        raw = list_playlists_with_covers(_WIDGET_COVERS_DIR)
+        raw = list_playlists_with_covers(
+            _WIDGET_COVERS_DIR, exclude_folder=RECO_FOLDER_NAME
+        )
     except Exception:  # noqa: BLE001
         return []
 
@@ -165,6 +170,7 @@ def _playlists(limit: int) -> list[dict]:
                 "name": name,
                 "count": int(entry.get("count") or 0),
                 "cover_filename": cover_filename,
+                "is_favorite": bool(entry.get("is_favorite")),
             }
         )
         if len(items) >= limit:

@@ -560,3 +560,113 @@ def test_playlist_name_supports_special_chars(env: Paths) -> None:
 
     mock_add.assert_called_once()
     assert mock_add.call_args[0][0] == tricky
+
+
+# ── Cancel ────────────────────────────────────────────────────────────────
+
+
+def test_stale_flag_cleared_before_loop_starts(env: Paths) -> None:
+    """Un flag oublié d'un crash précédent ne doit PAS annuler le run suivant."""
+    Path(env.widget_cancel_path).write_text("1")
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        track.apple_id = "AP_" + track.isrc
+        return None
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=lambda isrc, _albums: _track(isrc),
+        ),
+        patch(
+            "music_manager.pipeline.importer.import_resolved_track",
+            side_effect=fake_import,
+        ),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        code = import_cmd.main(["FRABC1234567"])
+
+    assert code == import_cmd.EXIT_OK
+    status = json.loads(Path(env.widget_status_path).read_text())
+    # Le flag stale a été nettoyé → l'import s'est terminé normalement.
+    assert status["status"] == "done"
+    assert not Path(env.widget_cancel_path).exists()
+
+
+def test_cancel_flag_mid_run_stops_after_current_track(env: Paths) -> None:
+    """Flag posé après la première track → la 2e track ne tourne pas."""
+    seen: list[str] = []
+
+    def resolve_and_set_flag(isrc: str, _albums):
+        seen.append(isrc)
+        # On pose le flag pendant la 1ʳᵉ track : la check au début du 2e tour
+        # de boucle doit déclencher l'arrêt.
+        Path(env.widget_cancel_path).write_text("1")
+        return _track(isrc)
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        track.apple_id = "AP_" + track.isrc
+        return None
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=resolve_and_set_flag,
+        ),
+        patch(
+            "music_manager.pipeline.importer.import_resolved_track",
+            side_effect=fake_import,
+        ),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        code = import_cmd.main(["FRABC1234567,USUM71916175"])
+
+    assert code == import_cmd.EXIT_OK
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["status"] == "cancelled"
+    # La 1ʳᵉ track a été importée avant que le flag soit checké au début du 2e tour.
+    assert len(status["completed"]) == 1
+    assert seen == ["FRABC1234567"]
+
+
+def test_partial_playlist_added_on_cancel(env: Paths) -> None:
+    """Sur annulation avec --playlist-name : la playlist garde les tracks déjà importées."""
+    isrcs_seen: list[str] = []
+
+    def resolve_and_cancel_after_one(isrc: str, _albums):
+        isrcs_seen.append(isrc)
+        if len(isrcs_seen) >= 1:
+            Path(env.widget_cancel_path).write_text("1")
+        return _track(isrc)
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        track.apple_id = "AP_" + track.isrc
+        return None
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=resolve_and_cancel_after_one,
+        ),
+        patch(
+            "music_manager.pipeline.importer.import_resolved_track",
+            side_effect=fake_import,
+        ),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+        patch(
+            "music_manager.cli.import_cmd.add_to_playlist", return_value=1
+        ) as mock_add,
+    ):
+        import_cmd.main(
+            ["FRABC1234567,USUM71916175", "--playlist-name", "Annulée"]
+        )
+
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["status"] == "cancelled"
+    # La playlist doit avoir reçu les tracks déjà importées.
+    mock_add.assert_called_once()
+    assert mock_add.call_args[0][0] == "Annulée"
+    assert mock_add.call_args[0][1] == ["AP_FRABC1234567"]

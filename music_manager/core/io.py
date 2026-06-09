@@ -108,6 +108,51 @@ def save_csv(path: str, rows: list[dict[str, str]]) -> None:
     os.replace(tmp_path, path)
 
 
+def read_csv_flexible(path: str) -> list[dict[str, str]]:
+    """Read a CSV in either Exportify or standard format. Does not modify the file.
+
+    Detects Exportify column names (``Track Name``, ``Artist Name(s)``, etc.)
+    or falls back to standard names (``title``, ``artist``, ``album``,
+    ``isrc``). Returns rows in the standard shape so callers don't have to
+    care which format they have.
+    """
+    rows: list[dict] = []
+    try:
+        with open(path, encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            fieldnames = reader.fieldnames or []
+            col_map = {
+                key: next((col for col in candidates if col in fieldnames), None)
+                for key, candidates in _EXPORTIFY_COLS.items()
+            }
+            standard = {
+                "title": "title",
+                "artist": "artist",
+                "album": "album",
+                "isrc": "isrc",
+            }
+            for key, default_col in standard.items():
+                if not col_map.get(key):
+                    col_map[key] = default_col if default_col in fieldnames else None
+            for row in reader:
+                title = row.get(col_map.get("title") or "", "").strip()
+                artist = row.get(col_map.get("artist") or "", "").strip()
+                if not title or not artist:
+                    continue
+                entry: dict = {
+                    "title": title,
+                    "artist": artist,
+                    "album": row.get(col_map.get("album") or "", "").strip(),
+                }
+                isrc = row.get(col_map.get("isrc") or "", "").strip()
+                if isrc:
+                    entry["isrc"] = isrc
+                rows.append(entry)
+    except (FileNotFoundError, OSError):
+        pass
+    return rows
+
+
 def convert_exportify(path: str) -> bool:
     """Detect and convert an Exportify/Spotify CSV to standard format.
 

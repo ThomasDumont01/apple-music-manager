@@ -712,16 +712,22 @@ class MenuScreenCore(_Base):
             self._start_identify()
         elif key == "recommend":
             self._start_recommendations()
-        elif key == "recommend_general":
-            self._on_recommend_mode_selected("general")
+        elif key == "recommend_library":
+            self._on_recommend_mode_selected("library")
+        elif key == "recommend_discovery":
+            self._on_recommend_mode_selected("discovery")
         elif key == "recommend_genre":
             self._show_genre_selector()
         elif key == "recommend_mood":
             self._show_mood_selector()
+        elif key == "recommend_playlist":
+            self._show_playlist_selector()
         elif key.startswith("recommend_genre:"):
             self._on_recommend_mode_selected(f"genre:{key.split(':', 1)[1]}")
         elif key.startswith("recommend_mood:"):
             self._on_recommend_mode_selected(f"mood:{key.split(':', 1)[1]}")
+        elif key.startswith("recommend_playlist:"):
+            self._on_recommend_mode_selected(f"playlist:{key.split(':', 1)[1]}")
         elif key.startswith("recommend_count:"):
             try:
                 count = int(key.split(":", 1)[1])
@@ -950,6 +956,7 @@ class MenuScreenCore(_Base):
         elif self._view in (
             "recommend_select_genre",
             "recommend_select_mood",
+            "recommend_select_playlist",
             "recommend_select_count",
         ):
             self._show_mode_selector()

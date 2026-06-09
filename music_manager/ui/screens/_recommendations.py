@@ -21,11 +21,14 @@ from music_manager.ui.text import (
     RECOMMEND_ERROR_GENERIC,
     RECOMMEND_ERROR_NO_KEY,
     RECOMMEND_GENERATING,
-    RECOMMEND_MODE_GENERAL,
+    RECOMMEND_MODE_DISCOVERY,
     RECOMMEND_MODE_GENRE,
+    RECOMMEND_MODE_LIBRARY,
     RECOMMEND_MODE_MOOD,
+    RECOMMEND_MODE_PLAYLIST,
     RECOMMEND_MOODS,
     RECOMMEND_NO_GENRES,
+    RECOMMEND_NO_USER_PLAYLISTS,
     RECOMMEND_SCAN_RUNNING,
     RECOMMEND_TITLE,
 )
@@ -51,7 +54,7 @@ class RecommendationsMixin(_MixinBase):
         from music_manager.services.lastfm import get_api_key  # noqa: PLC0415
 
         self._return_to = "tools"
-        self._recommend_mode = "general"
+        self._recommend_mode = "library"
         self._recommend_count = 20
         self._recommend_running = False
         self._recommend_result = None
@@ -97,12 +100,14 @@ class RecommendationsMixin(_MixinBase):
     # ── Mode selector ───────────────────────────────────────────────────────
 
     def _show_mode_selector(self) -> None:
-        """Display the general/genre/mood picker."""
+        """Display the five mode options."""
         self._view = "recommend_select_mode"
         self._items = [
-            ("recommend_general", RECOMMEND_MODE_GENERAL),
+            ("recommend_library", RECOMMEND_MODE_LIBRARY),
+            ("recommend_playlist", RECOMMEND_MODE_PLAYLIST),
             ("recommend_genre", RECOMMEND_MODE_GENRE),
             ("recommend_mood", RECOMMEND_MODE_MOOD),
+            ("recommend_discovery", RECOMMEND_MODE_DISCOVERY),
             None,
             ("back", "Retour"),
         ]
@@ -137,7 +142,34 @@ class RecommendationsMixin(_MixinBase):
         self._items.append(("back", "Retour"))
         self._selectable = [i for i, item in enumerate(self._items) if item is not None]
         self._cursor = 0
-        self._set_header(render_sub_header(f"{RECOMMEND_TITLE} — Mood"))
+        self._set_header(render_sub_header(f"{RECOMMEND_TITLE} — Ambiance"))
+        self._refresh_menu()
+        self._set_help(HELP_RECOMMEND)
+
+    def _show_playlist_selector(self) -> None:
+        """List Apple Music user playlists outside the ``for me`` folder."""
+        from music_manager.services import apple  # noqa: PLC0415
+
+        try:
+            playlists = apple.list_playlists(exclude_folder=apple.RECO_FOLDER_NAME)
+        except Exception:  # noqa: BLE001
+            playlists = []
+        # Defensive: also drop anything that still bears the legacy name.
+        playlists = [(name, count) for name, count in playlists if name != "for me"]
+        if not playlists:
+            self._show_recommend_error(RECOMMEND_NO_USER_PLAYLISTS)
+            return
+
+        self._view = "recommend_select_playlist"
+        self._items = [
+            (f"recommend_playlist:{name}", f"{name} ({count})")
+            for name, count in playlists
+        ]
+        self._items.append(None)
+        self._items.append(("back", "Retour"))
+        self._selectable = [i for i, item in enumerate(self._items) if item is not None]
+        self._cursor = 0
+        self._set_header(render_sub_header(f"{RECOMMEND_TITLE} — Playlist"))
         self._refresh_menu()
         self._set_help(HELP_RECOMMEND)
 
@@ -253,10 +285,24 @@ class RecommendationsMixin(_MixinBase):
             self._show_recommend_error(RECOMMEND_ERROR_EMPTY)
             return
 
+        from music_manager.pipeline.recommend import (  # noqa: PLC0415
+            playlist_name_for_mode,
+        )
+
+        try:
+            playlist_label = playlist_name_for_mode(self._recommend_mode)
+        except ValueError:
+            playlist_label = "library"
+        adopted = getattr(result, "adopted_playlist", 0)
+        kept = getattr(result, "kept_library", 0)
+        rejected = getattr(result, "rejected", 0)
         summary = RECOMMEND_DONE_SUMMARY.format(
             imported=result.imported,
             failed=result.failed,
-            blacklist=result.deleted_blacklisted,
+            playlist=playlist_label,
+            adopted=adopted,
+            kept=kept,
+            rejected=rejected,
         )
         self._set_body(summary)
         self._set_help(HELP_RECOMMEND_DONE, with_newline=False)

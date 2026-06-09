@@ -99,7 +99,14 @@ def test_start_recommendations_shows_mode_selector_with_key(stub, monkeypatch) -
     stub._start_recommendations()
     assert stub._view == "recommend_select_mode"
     keys = [item[0] for item in stub._items if item is not None]
-    assert {"recommend_general", "recommend_genre", "recommend_mood", "back"} <= set(keys)
+    assert {
+        "recommend_library",
+        "recommend_playlist",
+        "recommend_genre",
+        "recommend_mood",
+        "recommend_discovery",
+        "back",
+    } <= set(keys)
 
 
 def test_show_genre_selector_lists_top_genres(stub) -> None:
@@ -163,7 +170,7 @@ def test_progress_updates_view_per_phase(stub) -> None:
 
 def test_on_recommend_done_success_renders_summary(stub) -> None:
     """A success result lands on recommend_done with the summary text."""
-    result = GenerationResult(imported=15, failed=2, deleted_blacklisted=3)
+    result = GenerationResult(imported=15, failed=2, rejected=3)
     stub._on_recommend_done(result)
     assert stub._view == "recommend_done"
     body = stub._bodies[-1]
@@ -230,7 +237,7 @@ def test_on_recommend_count_selected_clamps_invalid(stub, monkeypatch) -> None:
 def test_recommend_done_state_does_not_carry_stale_selectables(stub, monkeypatch) -> None:
     """Regression: after a generation, _items must NOT still point to the mode selector.
 
-    Otherwise pressing Enter on the done screen re-triggers `recommend_general` and
+    Otherwise pressing Enter on the done screen re-triggers `recommend_library` and
     relaunches the whole pipeline.
     """
     monkeypatch.setenv("LASTFM_API_KEY", "fake")
@@ -238,7 +245,7 @@ def test_recommend_done_state_does_not_carry_stale_selectables(stub, monkeypatch
     # User picked a mode → worker would normally run. Simulate completion.
     assert stub._view == "recommend_select_mode"
     stale_keys = {item[0] for item in stub._items if item is not None}
-    assert "recommend_general" in stale_keys  # confirm the bug surface
+    assert "recommend_library" in stale_keys  # confirm the bug surface
 
     stub._on_recommend_done(GenerationResult(imported=5))
     assert stub._view == "recommend_done"

@@ -56,6 +56,42 @@ def dispatch(args: list[str]) -> int:
         from music_manager.cli.playlist_tracks import main as cmd  # noqa: PLC0415
 
         return cmd(rest)
+    if name == "spotify-login":
+        from music_manager.cli.spotify_login import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "spotify-auth-status":
+        from music_manager.cli.spotify_auth_status import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "spotify-logout":
+        from music_manager.cli.spotify_logout import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "spotify-playlists":
+        from music_manager.cli.spotify_playlists import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "spotify-playlist-tracks":
+        from music_manager.cli.spotify_playlist_tracks import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "spotify-set-client-id":
+        from music_manager.cli.spotify_set_client_id import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "exportify-process-csv":
+        from music_manager.cli.exportify_process_csv import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "playlist-local-tracks":
+        from music_manager.cli.playlist_local_tracks import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "import-cancel":
+        from music_manager.cli.import_cancel import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
 
     _print_usage()
     return 2
@@ -76,6 +112,15 @@ def _print_usage() -> None:
         "  play APPLE_ID\n"
         "  play-playlist \"Playlist Name\"\n"
         "  shuffle\n"
-        "  home [--recent-limit N] [--playlist-limit N]",
+        "  home [--recent-limit N] [--playlist-limit N]\n"
+        "  spotify-login [--detach] [--timeout SECONDS]\n"
+        "  spotify-auth-status\n"
+        "  spotify-logout\n"
+        "  spotify-playlists\n"
+        "  spotify-playlist-tracks <SPOTIFY_ID|liked> [--max N]\n"
+        "  spotify-set-client-id <CLIENT_ID>\n"
+        "  exportify-process-csv <ABSOLUTE_PATH>\n"
+        "  playlist-local-tracks <NAME>\n"
+        "  import-cancel",
         file=sys.stderr,
     )

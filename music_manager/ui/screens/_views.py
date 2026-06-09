@@ -66,6 +66,7 @@ class View(Enum):
     RECOMMEND_SELECT_MODE = "recommend_select_mode"
     RECOMMEND_SELECT_GENRE = "recommend_select_genre"
     RECOMMEND_SELECT_MOOD = "recommend_select_mood"
+    RECOMMEND_SELECT_PLAYLIST = "recommend_select_playlist"
     RECOMMEND_SELECT_COUNT = "recommend_select_count"
     RECOMMEND_SCANNING = "recommend_scanning"
     RECOMMEND_GENERATING = "recommend_generating"

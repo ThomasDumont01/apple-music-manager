@@ -48,21 +48,32 @@ class Profile:
     loved_isrcs: set[str] = field(default_factory=set)
 
 
-def build_profile(tracks: dict[str, dict], *, mode: str = "general") -> Profile:
+def build_profile(
+    tracks: dict[str, dict],
+    *,
+    mode: str = "general",
+    playlist_apple_ids: set[str] | None = None,
+) -> Profile:
     """Compute a Profile from a tracks store snapshot.
 
     The mode controls scope:
-    - "general": consider the entire library.
+    - "general" / "library": consider the entire library (aliases).
+    - "discovery": same scope as library — exploration bias lives in the
+      ranking stage, not here.
     - "genre:<name>": restrict to tracks whose genre matches <name>
       (case-insensitive, exact match).
-    - "mood:<tag>": no local scoping; the caller drives recommendations
-      directly from a Last.fm tag. Profile is computed on the full library
-      so artist/genre bonuses remain available.
+    - "playlist:<name>": restrict to tracks whose apple_id is in
+      ``playlist_apple_ids`` (the caller resolves the playlist).
+    - "mood:<tag>": no local scoping; caller drives via Last.fm tag.
+
+    If ``playlist_apple_ids`` is provided, only those tracks contribute
+    (independent of ``mode``). An empty set yields an empty Profile.
 
     Tracks without an ISRC are skipped: they cannot be deduplicated or
     used as Last.fm seeds reliably.
     """
     genre_filter = _parse_genre_filter(mode)
+    use_playlist_filter = playlist_apple_ids is not None
 
     scored: list[tuple[float, str, str, str, str]] = []
     artist_scores: Counter[str] = Counter()
@@ -71,7 +82,10 @@ def build_profile(tracks: dict[str, dict], *, mode: str = "general") -> Profile:
 
     now = datetime.now(UTC)
 
-    for entry in tracks.values():
+    for apple_id, entry in tracks.items():
+        if use_playlist_filter and apple_id not in (playlist_apple_ids or set()):
+            continue
+
         isrc = str(entry.get("isrc") or "").upper()
         if not isrc:
             continue

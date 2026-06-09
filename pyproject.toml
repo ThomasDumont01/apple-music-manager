@@ -1,6 +1,6 @@
 [project]
 name = "music-manager"
-version = "1.1.0"
+version = "1.2.0"
 description = "Import tracks into Apple Music with HD artwork and official audio."
 license = "MIT"
 requires-python = ">=3.11"

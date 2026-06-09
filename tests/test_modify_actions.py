@@ -347,10 +347,13 @@ def test_change_album_edition_empty_tracklist(mock_tl, tmp_path) -> None:
     assert result.error == "album_tracklist_empty"
 
 
+@patch(f"{_PATCH_APL}.update_tracks_batch")
 @patch(f"{_PATCH_IMP}.cleanup_covers")
 @patch(f"{_PATCH_RES}.deezer_get")
 @patch(f"{_PATCH_RES}.get_album_tracklist")
-def test_change_album_edition_all_same_isrc(mock_tl, mock_dz, mock_clean, tmp_path) -> None:
+def test_change_album_edition_all_same_isrc(
+    mock_tl, mock_dz, mock_clean, mock_batch, tmp_path
+) -> None:
     """All tracks already have correct ISRC → success (metadata updated)."""
     tracks = Tracks(str(tmp_path / "t.json"))
     albums = Albums(str(tmp_path / "a.json"))

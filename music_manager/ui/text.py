@@ -313,7 +313,8 @@ HELP_DUP = "↑↓  naviguer    ⏎  garder    s  passer    p  écouter    esc  
 # ── Recommendations labels ────────────────────────────────────────────────
 
 RECOMMEND_TITLE = "Recommandations"
-RECOMMEND_PLAYLIST_NAME = "for me"
+RECOMMEND_FOLDER_NAME = "for me"
+RECOMMEND_PLAYLIST_NAME = "for me"  # legacy alias (used by old UI strings)
 RECOMMEND_API_KEY_PROMPT = (
     "Clé API Last.fm requise.\n"
     "Crée-en une gratuitement sur https://www.last.fm/api\n"
@@ -321,12 +322,17 @@ RECOMMEND_API_KEY_PROMPT = (
 )
 RECOMMEND_API_KEY_INVALID = "Clé invalide. Vérifie et réessaie."
 RECOMMEND_SELECT_PROMPT = "Quel type de recommandations ?"
-RECOMMEND_MODE_GENERAL = "Tout style (basé sur tes goûts)"
-RECOMMEND_MODE_GENRE = "Cibler un genre"
-RECOMMEND_MODE_MOOD = "Cibler un mood"
+RECOMMEND_MODE_LIBRARY = "Bibliothèque — basé sur tous tes goûts"
+RECOMMEND_MODE_GENERAL = RECOMMEND_MODE_LIBRARY  # legacy alias
+RECOMMEND_MODE_PLAYLIST = "Playlist — à partir d'une de tes playlists"
+RECOMMEND_MODE_GENRE = "Genre — cibler un genre précis"
+RECOMMEND_MODE_MOOD = "Ambiance — cibler une humeur"
+RECOMMEND_MODE_DISCOVERY = "Découverte — sortir des sentiers battus"
 RECOMMEND_NO_GENRES = "Pas assez de genres dans ta bibliothèque."
+RECOMMEND_NO_USER_PLAYLISTS = "Aucune playlist trouvée dans Apple Music."
 RECOMMEND_GENRE_PROMPT = "Choisis un genre :"
 RECOMMEND_MOOD_PROMPT = "Choisis un mood :"
+RECOMMEND_PLAYLIST_PROMPT = "Choisis une playlist source :"
 RECOMMEND_COUNT_PROMPT = "Combien de recommandations ?"
 RECOMMEND_COUNTS: list[tuple[int, str]] = [
     (10, "10  — rapide (~30 s)"),
@@ -349,8 +355,10 @@ RECOMMEND_RESOLVING = "Recherche sur Deezer..."
 RECOMMEND_IMPORTING_PROGRESS = "Import {current}/{total}..."
 RECOMMEND_DONE_TITLE = "Recommandations ajoutées"
 RECOMMEND_DONE_SUMMARY = (
-    "{imported} ajoutée(s) à la playlist « for me ».\n"
-    "{failed} échouée(s) — {blacklist} blacklistée(s) ignorée(s)."
+    "{imported} ajoutée(s) à « for me / {playlist} ».\n"
+    "{failed} échouée(s).\n"
+    "Bilan apprentissage : {adopted} adoptée(s), "
+    "{kept} gardée(s) en bibliothèque, {rejected} retirée(s)."
 )
 RECOMMEND_ERROR_NO_KEY = "Aucune clé Last.fm configurée."
 RECOMMEND_ERROR_EMPTY = "Last.fm n'a renvoyé aucune piste. Réessaie plus tard."

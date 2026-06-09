@@ -695,9 +695,13 @@ def build_track(deezer_data: dict, album_data: dict) -> Track:
 def http_get(url: str, timeout: int = _REQUEST_TIMEOUT, **kwargs: Any) -> requests.Response:
     """HTTP GET using the shared session (connection pooling).
 
-    All modules should use this instead of raw ``requests.get()``.
+    All modules should use this instead of raw ``requests.get()``. A custom
+    ``headers=`` kwarg overrides the module default (``_HEADERS``); otherwise
+    the default is used.
     """
-    return _SESSION.get(url, timeout=timeout, headers=_HEADERS, **kwargs)
+    if "headers" not in kwargs:
+        kwargs["headers"] = _HEADERS
+    return _SESSION.get(url, timeout=timeout, **kwargs)
 
 
 def search_itunes_covers(album_title: str, artist: str) -> list[dict]:

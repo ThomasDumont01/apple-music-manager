@@ -30,6 +30,15 @@ _CLI_COMMANDS = frozenset(
         "play-playlist",
         "shuffle",
         "home",
+        "spotify-login",
+        "spotify-auth-status",
+        "spotify-logout",
+        "spotify-playlists",
+        "spotify-playlist-tracks",
+        "spotify-set-client-id",
+        "exportify-process-csv",
+        "playlist-local-tracks",
+        "import-cancel",
     }
 )
 
@@ -97,6 +106,19 @@ def main() -> None:
     recs = (
         RecommendationsStore(paths.recommendations_path) if config["setup_done"] else None
     )
+
+    # ── Single-instance guard ────────────────────────────
+    # Two UIs writing to recommendations.json / tracks.json in parallel
+    # would corrupt the stores. The lock is acquired by ``MusicApp.on_mount``;
+    # here we just refuse to start when a live PID already holds it.
+    from music_manager.cli.lock import is_locked, lock_owner_pid  # noqa: PLC0415
+
+    if is_locked(paths.ui_lock_path):
+        other_pid = lock_owner_pid(paths.ui_lock_path)
+        sys.exit(
+            "Music Manager est déjà en cours d'exécution"
+            f" (PID {other_pid}). Ferme l'autre instance avant de relancer."
+        )
 
     # ── Launch Textual UI ────────────────────────────────
     from music_manager.ui.app import MusicApp  # noqa: PLC0415

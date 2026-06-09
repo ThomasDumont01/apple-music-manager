@@ -89,6 +89,22 @@ def get_top_tracks_by_tag(tag: str, *, limit: int = 50) -> list[dict]:
     return [_normalize_track(item) for item in raw if item]
 
 
+def get_chart_top_tracks(*, limit: int = 200) -> list[dict]:
+    """Return the global Last.fm chart top tracks.
+
+    Used as a discovery cold-start fallback when the user's library has
+    no profile seeds yet. No ``match`` field on chart items, so it
+    surfaces as ``match=0.0`` (skipped by the standard quality filter
+    but accepted in cold-start when no other source has produced
+    candidates).
+    """
+    data = _lastfm_get("chart.gettoptracks", {"limit": str(limit)})
+    if not data:
+        return []
+    raw = _extract_list(data, "tracks", "track")
+    return [_normalize_track(item) for item in raw if item]
+
+
 def get_similar_artists(artist: str, *, limit: int = 10) -> list[dict]:
     """Return artists similar to ``artist`` (fallback when seeds run dry)."""
     if not artist:

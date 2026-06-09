@@ -76,8 +76,50 @@ def test_add_active_duplicate_isrc_is_noop(store_path: str) -> None:
 def test_add_active_skips_when_isrc_missing(store_path: str) -> None:
     """An entry without an ISRC cannot be deduped → must be rejected."""
     store = RecommendationsStore(store_path)
-    store.add_active({"isrc": "", "apple_id": "AP", "title": "T", "artist": "A"})
+    result = store.add_active({"isrc": "", "apple_id": "AP", "title": "T", "artist": "A"})
     assert store.all_active() == {}
+    assert result == {"added": False, "reason": "no_isrc"}
+
+
+def test_add_active_returns_added_true_on_success(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    result = store.add_active(
+        {"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"}
+    )
+    assert result == {"added": True}
+
+
+def test_add_active_duplicate_returns_current_playlist(store_path: str) -> None:
+    """Re-adding an ISRC reports the playlist the original was filed under.
+
+    Lets the caller log a cross-playlist conflict (importing the same
+    track into ``for me/library`` then ``for me/rock``).
+    """
+    store = RecommendationsStore(store_path)
+    store.add_active(
+        {
+            "isrc": "X1",
+            "apple_id": "AP1",
+            "title": "T",
+            "artist": "A",
+            "playlist": "library",
+        }
+    )
+    result = store.add_active(
+        {
+            "isrc": "X1",
+            "apple_id": "AP1",
+            "title": "T",
+            "artist": "A",
+            "playlist": "rock",
+        }
+    )
+    assert result == {
+        "added": False,
+        "reason": "duplicate",
+        "current_playlist": "library",
+    }
+    assert store.all_active()["X1"]["playlist"] == "library"  # unchanged
 
 
 def test_blacklist_removes_from_active(store_path: str) -> None:
@@ -159,7 +201,7 @@ def test_save_is_atomic(store_path: str) -> None:
     store.save()
 
     raw = json.loads(Path(store_path).read_text())
-    assert set(raw.keys()) == {"active", "blacklist", "stats"}
+    assert set(raw.keys()) == {"active", "outcomes", "stats"}
 
 
 def test_save_skipped_when_clean(store_path: str) -> None:
@@ -235,3 +277,245 @@ def test_blacklist_preserves_seed_isrc(store_path: str) -> None:
     )
     store.blacklist("X1")
     assert store.all_blacklist()["X1"]["seed_isrc"] == "S1"
+
+
+# ── Outcomes 3-states ───────────────────────────────────────────────────────
+
+
+def test_record_outcome_adopted_playlist_moves_from_active(store_path: str) -> None:
+    """record_outcome with state=adopted_playlist removes from active."""
+    store = RecommendationsStore(store_path)
+    store.add_active(
+        {"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A", "genre": "Rock"}
+    )
+    store.record_outcome(
+        "X1",
+        state="adopted_playlist",
+        from_playlist="for me / library",
+        to_playlists=["My Favs", "Workout"],
+    )
+    assert not store.is_active("X1")
+    assert store.is_outcome("X1")
+    assert store.is_adopted("X1")
+    entry = store.all_outcomes()["X1"]
+    assert entry["state"] == "adopted_playlist"
+    assert entry["from_playlist"] == "for me / library"
+    assert entry["to_playlists"] == ["My Favs", "Workout"]
+    assert entry["outcome_at"]
+    assert entry["title"] == "T"
+    assert entry["artist"] == "A"
+    assert entry["genre"] == "Rock"
+
+
+def test_record_outcome_kept_library(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.add_active({"isrc": "X1", "apple_id": "A", "title": "T", "artist": "A"})
+    store.record_outcome("X1", state="kept_library", from_playlist="for me / library")
+    assert store.is_kept("X1")
+    assert not store.is_adopted("X1")
+    assert not store.is_rejected("X1")
+
+
+def test_record_outcome_rejected(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.add_active({"isrc": "X1", "apple_id": "A", "title": "T", "artist": "A"})
+    store.record_outcome("X1", state="rejected", from_playlist="for me / library")
+    assert store.is_rejected("X1")
+    assert store.is_blacklisted("X1")  # backward-compat alias
+
+
+def test_record_outcome_invalid_state_raises(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    with pytest.raises(ValueError):
+        store.record_outcome("X1", state="banana")
+
+
+def test_record_outcome_empty_isrc_noop(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.record_outcome("", state="rejected")
+    assert store.all_outcomes() == {}
+
+
+def test_record_outcome_overwrites_previous(store_path: str) -> None:
+    """If state changes (e.g. rejected → adopted_playlist later), overwrite."""
+    store = RecommendationsStore(store_path)
+    store.record_outcome("X1", state="rejected", title="T", artist="A")
+    store.record_outcome(
+        "X1", state="adopted_playlist", to_playlists=["My Favs"], title="T", artist="A"
+    )
+    assert store.is_adopted("X1")
+    assert not store.is_rejected("X1")
+
+
+# ── Snapshots last_seen_loved / last_seen_playcount ────────────────────────
+
+
+def test_add_active_stamps_snapshots_with_defaults(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.add_active({"isrc": "X1", "apple_id": "A", "title": "T", "artist": "A"})
+    entry = store.all_active()["X1"]
+    assert entry["last_seen_loved"] is False
+    assert entry["last_seen_playcount"] == 0
+
+
+def test_add_active_honors_explicit_snapshots(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.add_active(
+        {
+            "isrc": "X1",
+            "apple_id": "A",
+            "title": "T",
+            "artist": "A",
+            "last_seen_loved": True,
+            "last_seen_playcount": 5,
+        }
+    )
+    entry = store.all_active()["X1"]
+    assert entry["last_seen_loved"] is True
+    assert entry["last_seen_playcount"] == 5
+
+
+def test_add_active_persists_playlist_target(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.add_active(
+        {
+            "isrc": "X1",
+            "apple_id": "A",
+            "title": "T",
+            "artist": "A",
+            "playlist": "for me / rock",
+        }
+    )
+    assert store.all_active()["X1"]["playlist"] == "for me / rock"
+
+
+def test_update_snapshot_modifies_active_entry(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.add_active({"isrc": "X1", "apple_id": "A", "title": "T", "artist": "A"})
+    store.update_snapshot("X1", loved=True, playcount=4)
+    entry = store.all_active()["X1"]
+    assert entry["last_seen_loved"] is True
+    assert entry["last_seen_playcount"] == 4
+
+
+def test_update_snapshot_on_unknown_isrc_is_noop(store_path: str) -> None:
+    store = RecommendationsStore(store_path)
+    store.update_snapshot("UNKNOWN", loved=True, playcount=10)
+    assert store.all_active() == {}
+
+
+# ── Migration douce : ancien blacklist → outcomes ───────────────────────────
+
+
+def test_legacy_blacklist_migrates_to_outcomes_rejected(tmp_path: Path) -> None:
+    """An old recommendations.json with a 'blacklist' key migrates on load."""
+    path = tmp_path / "recs.json"
+    path.write_text(
+        json.dumps(
+            {
+                "active": {},
+                "blacklist": {
+                    "OLD1": {
+                        "removed_at": "2025-01-01T00:00:00+00:00",
+                        "title": "Old",
+                        "artist": "Legacy",
+                        "seed_isrc": "S1",
+                    }
+                },
+                "stats": {"generations": 4},
+            }
+        )
+    )
+    store = RecommendationsStore(str(path))
+    assert store.is_rejected("OLD1")
+    assert store.is_blacklisted("OLD1")  # backward-compat alias
+    entry = store.all_outcomes()["OLD1"]
+    assert entry["state"] == "rejected"
+    assert entry["title"] == "Old"
+    assert entry["artist"] == "Legacy"
+    assert entry["seed_isrc"] == "S1"
+    assert entry["outcome_at"] == "2025-01-01T00:00:00+00:00"
+
+
+def test_legacy_active_without_playlist_field_migrates_to_library(
+    tmp_path: Path,
+) -> None:
+    """Active entries from before the per-playlist tracking get ``library``."""
+    path = tmp_path / "recs.json"
+    path.write_text(
+        json.dumps(
+            {
+                "active": {
+                    "OLD1": {
+                        "isrc": "OLD1",
+                        "apple_id": "AP1",
+                        "title": "T",
+                        "artist": "A",
+                        "play_count": 3,
+                        "loved": True,
+                    }
+                },
+                "outcomes": {},
+                "stats": {},
+            }
+        )
+    )
+    store = RecommendationsStore(str(path))
+    entry = store.all_active()["OLD1"]
+    assert entry["playlist"] == "library"
+    assert entry["last_seen_loved"] is True
+    assert entry["last_seen_playcount"] == 3
+
+
+def test_legacy_active_migration_persists_on_resave(tmp_path: Path) -> None:
+    path = tmp_path / "recs.json"
+    path.write_text(
+        json.dumps(
+            {
+                "active": {
+                    "OLD1": {
+                        "isrc": "OLD1", "apple_id": "AP1", "title": "T", "artist": "A",
+                    }
+                }
+            }
+        )
+    )
+    store = RecommendationsStore(str(path))
+    store.save()
+    raw = json.loads(path.read_text())
+    assert raw["active"]["OLD1"]["playlist"] == "library"
+    assert raw["active"]["OLD1"]["last_seen_loved"] is False
+    assert raw["active"]["OLD1"]["last_seen_playcount"] == 0
+
+
+def test_legacy_blacklist_migration_does_not_lose_data_on_resave(tmp_path: Path) -> None:
+    path = tmp_path / "recs.json"
+    path.write_text(
+        json.dumps({"active": {}, "blacklist": {"OLD1": {"title": "T", "artist": "A"}}})
+    )
+    store = RecommendationsStore(str(path))
+    store.mark_dirty()
+    store.save()
+    raw = json.loads(path.read_text())
+    assert "outcomes" in raw
+    assert "blacklist" not in raw
+    assert raw["outcomes"]["OLD1"]["state"] == "rejected"
+
+
+# ── seed_quality uses outcomes (kept + adopted DO NOT count as negative) ────
+
+
+def test_seed_quality_only_rejected_counts_as_negative(store_path: str) -> None:
+    """A seed with adoptions+kept (no rejects) has ratio 0 — not flagged."""
+    store = RecommendationsStore(store_path)
+    for i in range(2):
+        store.add_active(
+            {"isrc": f"A{i}", "apple_id": f"AP{i}", "title": "T", "artist": "x", "seed_isrc": "S"}
+        )
+        store.record_outcome(f"A{i}", state="adopted_playlist")
+    store.add_active(
+        {"isrc": "K1", "apple_id": "AK", "title": "T", "artist": "x", "seed_isrc": "S"}
+    )
+    store.record_outcome("K1", state="kept_library")
+    quality = store.seed_quality()
+    assert quality["S"] == pytest.approx(0.0)

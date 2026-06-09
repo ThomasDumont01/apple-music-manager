@@ -17,6 +17,16 @@ _P_MAIN = "music_manager.__main__"
 _P_CONFIG = "music_manager.core.config"
 
 
+@pytest.fixture(autouse=True)
+def _no_running_ui_lock(monkeypatch):
+    """Pretend no other UI is running so the single-instance guard lets us through.
+
+    The smoke tests would otherwise inherit a stale ``~/.config/music_manager/
+    .ui.lock`` from a real previous launch and abort.
+    """
+    monkeypatch.setattr("music_manager.cli.lock.is_locked", lambda _path: False)
+
+
 # ── Smoke: first launch (setup_done=False) ─────────────────────────────────
 
 

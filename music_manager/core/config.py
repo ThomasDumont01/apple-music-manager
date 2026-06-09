@@ -21,6 +21,12 @@ _DEFAULTS = {
     "telemetry_consent": True,
     "youtube_cookies": False,
     "lastfm_api_key": "",
+    # Spotify OAuth (PKCE) — populated by `spotify-login`.
+    # Tokens are chmod'd 600 by `services/spotify.save_tokens`.
+    "spotify_client_id": "",
+    "spotify_access_token": "",
+    "spotify_refresh_token": "",
+    "spotify_token_expiry": 0.0,
 }
 
 
@@ -69,6 +75,7 @@ class Paths:
         self.albums_path = os.path.join(data_dir, "albums.json")
         self.preferences_path = os.path.join(data_dir, "preferences.json")
         self.recommendations_path = os.path.join(data_dir, "recommendations.json")
+        self.signals_log_path = os.path.join(data_dir, "signals.jsonl")
         self.logs_path = os.path.join(data_dir, "logs.jsonl")
 
         # Widget/CLI coordination — lives under config dir so it persists
@@ -76,6 +83,7 @@ class Paths:
         self.ui_lock_path = os.path.join(CONFIG_DIR, ".ui.lock")
         self.widget_lock_path = os.path.join(CONFIG_DIR, ".widget.lock")
         self.widget_status_path = os.path.join(CONFIG_DIR, "widget_status.json")
+        self.widget_cancel_path = os.path.join(CONFIG_DIR, ".widget_cancel")
 
         self.playlists_dir = os.path.join(data_root, "playlists")
         self.tmp_dir = os.path.join(data_root, ".tmp")

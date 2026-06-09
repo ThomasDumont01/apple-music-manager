@@ -12,6 +12,11 @@ from collections.abc import Callable
 
 from music_manager.core.models import LibraryEntry
 
+# ── Constants ────────────────────────────────────────────────────────────────
+
+RECO_FOLDER_NAME = "for me"
+
+
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 
@@ -288,11 +293,33 @@ def set_playlist_artwork(playlist_name: str, image_path: str) -> bool:
     return run_applescript(script) is not None
 
 
-def get_playlist_membership(apple_id: str) -> list[tuple[str, list[str]]]:
+def get_playlist_membership(
+    apple_id: str, exclude_folder: str | None = None
+) -> list[tuple[str, list[str]]]:
     """Find which user playlists contain a track.
 
-    Returns [(playlist_name, [ordered_persistent_ids]), ...] for playlists
-    that contain the given apple_id.
+    Returns ``[(playlist_name, [ordered_persistent_ids]), ...]``. If
+    ``exclude_folder`` is given, playlists whose parent folder bears
+    that name are omitted (used to skip the ``for me`` folder when
+    detecting adoption — moving a track between two ``for me``
+    sub-playlists is not adoption into a user playlist).
+    """
+    detailed = get_playlist_membership_detailed(apple_id)
+    return [
+        (name, ids)
+        for name, parent, ids in detailed
+        if not (exclude_folder and parent == exclude_folder)
+    ]
+
+
+def get_playlist_membership_detailed(
+    apple_id: str,
+) -> list[tuple[str, str, list[str]]]:
+    """Like ``get_playlist_membership`` but exposes each playlist's parent folder.
+
+    Returns ``[(playlist_name, parent_folder_or_empty, [ordered_ids]), ...]``.
+    Useful to distinguish moves between sub-playlists of the same folder
+    from genuine adoption into a user playlist.
     """
     script = (
         'tell application "Music"\n'
@@ -302,8 +329,13 @@ def get_playlist_membership(apple_id: str) -> list[tuple[str, list[str]]]:
         "            try\n"
         "                set t to first track of p"
         f' whose persistent ID is "{_esc(apple_id)}"\n'
+        '                set parentName to ""\n'
+        "                try\n"
+        "                    set parentName to name of parent of p\n"
+        "                end try\n"
         "                set pName to name of p\n"
-        '                set output to output & "PLAYLIST:" & pName & linefeed\n'
+        '                set output to output & "PLAYLIST:" & pName'
+        ' & "|||" & parentName & linefeed\n'
         "                repeat with tk in tracks of p\n"
         "                    set output to output"
         " & persistent ID of tk & linefeed\n"
@@ -318,19 +350,27 @@ def get_playlist_membership(apple_id: str) -> list[tuple[str, list[str]]]:
     if not result:
         return []
 
-    playlists: list[tuple[str, list[str]]] = []
+    playlists: list[tuple[str, str, list[str]]] = []
     current_name = ""
+    current_parent = ""
     current_ids: list[str] = []
+
+    def flush() -> None:
+        if not current_name:
+            return
+        playlists.append((current_name, current_parent, list(current_ids)))
+
     for line in result.strip().splitlines():
         if line.startswith("PLAYLIST:"):
-            if current_name:
-                playlists.append((current_name, current_ids))
-            current_name = line[9:]
+            flush()
+            header = line[9:]
+            parts = header.split("|||", 1)
+            current_name = parts[0]
+            current_parent = parts[1] if len(parts) > 1 else ""
             current_ids = []
         else:
             current_ids.append(line.strip())
-    if current_name:
-        playlists.append((current_name, current_ids))
+    flush()
 
     return playlists
 
@@ -359,16 +399,25 @@ def rebuild_playlist(playlist_name: str, apple_ids: list[str]) -> None:
     run_applescript(script)
 
 
-def list_playlists() -> list[tuple[str, int]]:
-    """List all user playlists. Returns [(name, track_count), ...] sorted by name."""
+def list_playlists(exclude_folder: str | None = None) -> list[tuple[str, int]]:
+    """List user playlists. Returns ``[(name, track_count), ...]`` sorted by name.
+
+    If ``exclude_folder`` is given, playlists whose parent folder bears
+    that name are omitted from the result.
+    """
     script = (
         'tell application "Music"\n'
         '    set output to ""\n'
         "    repeat with p in user playlists\n"
         "        if smart of p is false then\n"
+        '            set parentName to ""\n'
+        "            try\n"
+        "                set parentName to name of parent of p\n"
+        "            end try\n"
         "            set pName to name of p\n"
         "            set tCount to count of tracks of p\n"
-        '            set output to output & pName & ":" & tCount & linefeed\n'
+        '            set output to output & pName & "|||" & tCount'
+        ' & "|||" & parentName & linefeed\n'
         "        end if\n"
         "    end repeat\n"
         "    return output\n"
@@ -380,13 +429,236 @@ def list_playlists() -> list[tuple[str, int]]:
 
     playlists: list[tuple[str, int]] = []
     for line in result.strip().splitlines():
-        parts = line.rsplit(":", 1)
-        if len(parts) == 2:
-            try:
-                playlists.append((parts[0].strip(), int(parts[1].strip())))
-            except ValueError:
-                pass
+        parts = line.split("|||")
+        if len(parts) < 2:
+            continue
+        name = parts[0].strip()
+        try:
+            count = int(parts[1].strip())
+        except ValueError:
+            continue
+        parent_name = parts[2].strip() if len(parts) > 2 else ""
+        if exclude_folder and parent_name == exclude_folder:
+            continue
+        playlists.append((name, count))
     return sorted(playlists, key=lambda x: x[0].lower())
+
+
+def ensure_folder_playlist(folder_name: str) -> None:
+    """Create a folder playlist if it doesn't exist. Idempotent."""
+    if not folder_name:
+        return
+    escaped = _esc(folder_name)
+    script = (
+        'tell application "Music"\n'
+        "    try\n"
+        f'        folder playlist "{escaped}"\n'
+        "    on error\n"
+        f'        make new folder playlist with properties {{name:"{escaped}"}}\n'
+        "    end try\n"
+        "end tell"
+    )
+    run_applescript(script)
+
+
+def user_playlist_collides_with_folder(folder_name: str) -> bool:
+    """Return True if a non-folder user playlist already bears ``folder_name``.
+
+    Apple Music allows several items to share a name, so if the user has a
+    regular playlist called ``for me``, creating the folder of the same name
+    would leave two coexisting items and confuse navigation. Callers should
+    surface this state to the user (warn + suggest renaming) instead of
+    silently creating the duplicate folder.
+    """
+    if not folder_name:
+        return False
+    escaped = _esc(folder_name)
+    script = (
+        'tell application "Music"\n'
+        "    set found to false\n"
+        f'    repeat with p in (user playlists whose name is "{escaped}")\n'
+        "        try\n"
+        # If the item is itself a folder playlist, ``folder playlist`` of
+        # the same name resolves to the same ref — class check is the
+        # safest portable way.
+        "            if class of p is not folder playlist then\n"
+        "                set found to true\n"
+        "                exit repeat\n"
+        "            end if\n"
+        "        end try\n"
+        "    end repeat\n"
+        "    return found as string\n"
+        "end tell"
+    )
+    try:
+        result = run_applescript(script)
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(result) and result.strip().lower() == "true"
+
+
+def playlist_exists_in_folder(folder_name: str, playlist_name: str) -> bool:
+    """Return True if a playlist named ``playlist_name`` lives inside ``folder_name``."""
+    if not folder_name or not playlist_name:
+        return False
+    script = (
+        'tell application "Music"\n'
+        "    set found to false\n"
+        f'    repeat with p in (user playlists whose name is "{_esc(playlist_name)}")\n'
+        "        try\n"
+        f'            if name of parent of p is "{_esc(folder_name)}" then\n'
+        "                set found to true\n"
+        "                exit repeat\n"
+        "            end if\n"
+        "        end try\n"
+        "    end repeat\n"
+        "    return found as string\n"
+        "end tell"
+    )
+    try:
+        result = run_applescript(script)
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(result) and result.strip().lower() == "true"
+
+
+def get_playlist_tracks_in_folder(
+    folder_name: str, playlist_name: str
+) -> list[str]:
+    """Return persistent IDs of tracks in ``folder_name/playlist_name``, in order."""
+    if not folder_name or not playlist_name:
+        return []
+    script = (
+        'tell application "Music"\n'
+        '    set output to ""\n'
+        f'    repeat with p in (user playlists whose name is "{_esc(playlist_name)}")\n'
+        "        try\n"
+        f'            if name of parent of p is "{_esc(folder_name)}" then\n'
+        "                repeat with t in tracks of p\n"
+        "                    set output to output"
+        " & persistent ID of t & linefeed\n"
+        "                end repeat\n"
+        "                exit repeat\n"
+        "            end if\n"
+        "        end try\n"
+        "    end repeat\n"
+        "    return output\n"
+        "end tell"
+    )
+    result = run_applescript(script)
+    if not result:
+        return []
+    return [line.strip() for line in result.strip().splitlines() if line.strip()]
+
+
+def add_to_playlist_in_folder(
+    folder_name: str,
+    playlist_name: str,
+    apple_ids: list[str] | str,
+) -> int:
+    """Sync ``apple_ids`` into ``folder_name/playlist_name``.
+
+    Creates the folder if missing, then the playlist inside the folder
+    if missing. Preserves manually added tracks (same semantics as
+    ``add_to_playlist``). Returns the count of NEW tracks (not already
+    in the playlist before this call).
+    """
+    if isinstance(apple_ids, str):
+        apple_ids = [apple_ids]
+    if not apple_ids or not folder_name or not playlist_name:
+        return 0
+
+    escaped_folder = _esc(folder_name)
+    escaped_playlist = _esc(playlist_name)
+    id_list = ", ".join(f'"{_esc(aid)}"' for aid in apple_ids)
+
+    script = (
+        'tell application "Music"\n'
+        # 1. Locate or create the folder.
+        "    set folderRef to missing value\n"
+        "    try\n"
+        f'        set folderRef to folder playlist "{escaped_folder}"\n'
+        "    on error\n"
+        f'        set folderRef to make new folder playlist '
+        f'with properties {{name:"{escaped_folder}"}}\n'
+        "    end try\n"
+        # 2. Find an existing playlist of the right name:
+        #    - ``p``      : already inside the target folder → use as-is
+        #    - ``pOrphan``: same name but at the root (likely created before
+        #      we knew how to nest it) → move into the folder so the user
+        #      doesn't end up with duplicates.
+        "    set p to missing value\n"
+        "    set pOrphan to missing value\n"
+        f'    repeat with pl in (user playlists whose name is "{escaped_playlist}")\n'
+        '        set parentName to ""\n'
+        "        try\n"
+        "            set parentName to name of parent of pl\n"
+        "        end try\n"
+        f'        if parentName is "{escaped_folder}" then\n'
+        "            set p to pl\n"
+        "            exit repeat\n"
+        "        else if pOrphan is missing value then\n"
+        "            set pOrphan to pl\n"
+        "        end if\n"
+        "    end repeat\n"
+        "    if p is missing value and pOrphan is not missing value then\n"
+        "        try\n"
+        "            move pOrphan to folderRef\n"
+        "            set p to pOrphan\n"
+        "        end try\n"
+        "    end if\n"
+        # 3. Still nothing → create a fresh playlist and move it under the
+        #    folder. ``set parent of p to ...`` is silently a no-op on recent
+        #    Music.app, ``move`` is the documented verb that actually works.
+        "    if p is missing value then\n"
+        f'        set p to make new user playlist '
+        f'with properties {{name:"{escaped_playlist}"}}\n'
+        "        try\n"
+        "            move p to folderRef\n"
+        "        end try\n"
+        "    end if\n"
+        "    set existingIDs to {}\n"
+        "    try\n"
+        "        repeat with trk in tracks of p\n"
+        "            set end of existingIDs to persistent ID of trk\n"
+        "        end repeat\n"
+        "    end try\n"
+        f"    set csvIDs to {{{id_list}}}\n"
+        "    set manualIDs to {}\n"
+        "    repeat with eid in existingIDs\n"
+        "        if csvIDs does not contain (eid as string) then\n"
+        "            set end of manualIDs to eid\n"
+        "        end if\n"
+        "    end repeat\n"
+        "    try\n"
+        "        delete every track of p\n"
+        "    end try\n"
+        "    set addedCount to 0\n"
+        "    repeat with targetId in csvIDs\n"
+        "        try\n"
+        "            set t to first track of library playlist 1"
+        " whose persistent ID is targetId\n"
+        "            duplicate t to p\n"
+        "            if existingIDs does not contain (targetId as string) then\n"
+        "                set addedCount to addedCount + 1\n"
+        "            end if\n"
+        "        end try\n"
+        "    end repeat\n"
+        "    repeat with manualId in manualIDs\n"
+        "        try\n"
+        "            set t to first track of library playlist 1"
+        " whose persistent ID is manualId\n"
+        "            duplicate t to p\n"
+        "        end try\n"
+        "    end repeat\n"
+        "    return addedCount\n"
+        "end tell"
+    )
+    result = run_applescript(script)
+    try:
+        return int(result) if result else 0
+    except ValueError:
+        return 0
 
 
 def get_playlist_tracks(playlist_name: str) -> list[str]:

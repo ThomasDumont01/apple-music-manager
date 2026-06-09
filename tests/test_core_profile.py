@@ -172,3 +172,68 @@ def test_build_profile_mood_mode_uses_full_library() -> None:
     }
     profile = build_profile(tracks, mode="mood:chill")
     assert len(profile.top_tracks) == 2
+
+
+# ── mode library / discovery ────────────────────────────────────────────────
+
+
+def test_build_profile_library_mode_aliases_general() -> None:
+    tracks = {
+        "r": {"isrc": "R", "title": "S", "artist": "A", "genre": "Rock", "loved": True},
+        "p": {"isrc": "P", "title": "S2", "artist": "B", "genre": "Pop", "loved": True},
+    }
+    general = build_profile(tracks, mode="general")
+    library = build_profile(tracks, mode="library")
+    assert {isrc for isrc, _, _ in library.top_tracks} == {
+        isrc for isrc, _, _ in general.top_tracks
+    }
+
+
+def test_build_profile_discovery_mode_does_not_crash() -> None:
+    """``discovery`` is accepted; bias logic lives in the ranking stage."""
+    tracks = {
+        "r": {"isrc": "R", "title": "S", "artist": "A", "genre": "Rock", "loved": True},
+    }
+    profile = build_profile(tracks, mode="discovery")
+    assert len(profile.top_tracks) == 1
+
+
+# ── playlist_apple_ids filter ──────────────────────────────────────────────
+
+
+def test_build_profile_filters_by_playlist_apple_ids() -> None:
+    tracks = {
+        "AP1": {"isrc": "R", "title": "S", "artist": "A", "loved": True},
+        "AP2": {"isrc": "P", "title": "S2", "artist": "B", "loved": True},
+        "AP3": {"isrc": "Q", "title": "S3", "artist": "C", "loved": True},
+    }
+    profile = build_profile(tracks, playlist_apple_ids={"AP1", "AP3"})
+    isrcs = {isrc for isrc, _, _ in profile.top_tracks}
+    assert isrcs == {"R", "Q"}
+
+
+def test_build_profile_empty_playlist_filter_yields_empty_profile() -> None:
+    tracks = {
+        "AP1": {"isrc": "R", "title": "S", "artist": "A", "loved": True},
+    }
+    profile = build_profile(tracks, playlist_apple_ids=set())
+    assert profile.top_tracks == []
+    assert profile.top_artists == []
+
+
+def test_build_profile_playlist_filter_combined_with_mode() -> None:
+    tracks = {
+        "AP1": {
+            "isrc": "R", "title": "S", "artist": "A",
+            "genre": "Rock", "loved": True,
+        },
+        "AP2": {
+            "isrc": "P", "title": "S2", "artist": "B",
+            "genre": "Pop", "loved": True,
+        },
+    }
+    profile = build_profile(
+        tracks, mode="playlist:Workout", playlist_apple_ids={"AP1"}
+    )
+    isrcs = {isrc for isrc, _, _ in profile.top_tracks}
+    assert isrcs == {"R"}

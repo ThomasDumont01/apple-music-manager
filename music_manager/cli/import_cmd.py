@@ -131,6 +131,9 @@ def _run_import(
     tracks_store = Tracks(paths.tracks_path)
     albums_store = Albums(paths.albums_path)
 
+    # Clean any stale cancel flag from a previous aborted run.
+    _clear_cancel_flag(paths)
+
     status: dict = {
         "status": "running",
         "started_at": _now_iso(),
@@ -141,6 +144,7 @@ def _run_import(
         "current_title": "",
         "playlist_name": playlist_name,
         "playlist_added": 0,
+        "cancellable": True,
     }
     _write_status(paths.widget_status_path, status)
     log_event(
@@ -151,7 +155,11 @@ def _run_import(
     # we actually run an import (keeps the CLI startup tight).
     from music_manager.pipeline.importer import import_resolved_track  # noqa: PLC0415
 
+    cancelled = False
     for idx, isrc in enumerate(isrcs, start=1):
+        if _check_cancel(paths):
+            cancelled = True
+            break
         status["current"] = idx
         status["current_title"] = ""
         _write_status(paths.widget_status_path, status)
@@ -209,7 +217,9 @@ def _run_import(
 
     # Batch-add successful tracks into the requested Apple Music playlist.
     # add_to_playlist is idempotent (creates the playlist if missing, appends
-    # otherwise) and runs a single AppleScript call for all IDs.
+    # otherwise) and runs a single AppleScript call for all IDs. On cancel, we
+    # still create the playlist with whatever was already imported so the user
+    # keeps partial progress.
     if playlist_name:
         success_ids = [
             entry["apple_id"]
@@ -236,15 +246,17 @@ def _run_import(
                     playlist_name, playlist_cover_url, paths.tmp_dir
                 )
 
-    status["status"] = "done"
+    status["status"] = "cancelled" if cancelled else "done"
     status["finished_at"] = _now_iso()
     status["current_title"] = ""
     _write_status(paths.widget_status_path, status)
+    _clear_cancel_flag(paths)
     log_event(
         "widget_import_end",
         completed=len(status["completed"]),
         failed=len(status["failed"]),
         playlist_added=status["playlist_added"],
+        cancelled=cancelled,
     )
     return EXIT_OK
 
@@ -338,6 +350,19 @@ def _write_status(path: str, payload: dict) -> None:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _check_cancel(paths: Paths) -> bool:
+    """Return True if the cancel flag has been set by ``import-cancel``."""
+    return os.path.isfile(paths.widget_cancel_path)
+
+
+def _clear_cancel_flag(paths: Paths) -> None:
+    """Remove the cancel flag — called before run + after end (cleanup)."""
+    try:
+        os.remove(paths.widget_cancel_path)
+    except OSError:
+        pass
 
 
 def _augment_path() -> None:

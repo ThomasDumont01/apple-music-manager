@@ -180,6 +180,28 @@ def test_home_filters_system_playlists(
     assert names == ["Chill"]
 
 
+def test_home_passes_exclude_folder_for_me_to_playlist_covers(
+    env: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """The ``for me`` recommendation folder must be excluded from the widget.
+
+    Otherwise generated sub-playlists (``library``, ``rock``…) would
+    pollute the user's normal playlists.
+    """
+    seen: dict = {}
+
+    def capture(covers_dir, *, exclude_folder=None):
+        seen["exclude_folder"] = exclude_folder
+        return [{"name": "Chill", "count": 1, "cover_path": ""}]
+
+    with patch(
+        "music_manager.services.playlist_covers.list_playlists_with_covers",
+        side_effect=capture,
+    ):
+        home.main([])
+    assert seen["exclude_folder"] == "for me"
+
+
 def test_home_caps_playlist_count(
     env: Path, capsys: pytest.CaptureFixture
 ) -> None:
