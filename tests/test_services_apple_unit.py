@@ -472,9 +472,12 @@ def test_add_to_playlist_in_folder_emits_script(mock_run) -> None:
     # Use ``move`` (the documented verb) rather than ``set parent of`` so the
     # playlist actually lands inside the folder on recent Music.app.
     assert "move p to folderRef" in script
-    # Orphan recovery: a same-named playlist created earlier at the library
-    # root must be moved into the folder rather than left as a duplicate.
-    assert "move pOrphan to folderRef" in script
+    # A same-named user playlist at the root (the user's original) MUST stay
+    # untouched — the recommendation flow creates a sibling inside ``for me/``
+    # rather than moving the original. Guards against regression of the bug
+    # where the original playlist got moved + its tracks rewritten.
+    assert "pOrphan" not in script
+    assert "move pOrphan" not in script
 
 
 @patch(_PATCH)

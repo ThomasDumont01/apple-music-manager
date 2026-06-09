@@ -582,13 +582,11 @@ def add_to_playlist_in_folder(
         f'        set folderRef to make new folder playlist '
         f'with properties {{name:"{escaped_folder}"}}\n'
         "    end try\n"
-        # 2. Find an existing playlist of the right name:
-        #    - ``p``      : already inside the target folder → use as-is
-        #    - ``pOrphan``: same name but at the root (likely created before
-        #      we knew how to nest it) → move into the folder so the user
-        #      doesn't end up with duplicates.
+        # 2. Find an existing playlist of the right name *inside* the target
+        #    folder. Same-named playlists living elsewhere (e.g. the user's
+        #    original playlist at the root) MUST be left untouched — the
+        #    recommendation flow creates a separate sibling in ``for me/``.
         "    set p to missing value\n"
-        "    set pOrphan to missing value\n"
         f'    repeat with pl in (user playlists whose name is "{escaped_playlist}")\n'
         '        set parentName to ""\n'
         "        try\n"
@@ -597,16 +595,8 @@ def add_to_playlist_in_folder(
         f'        if parentName is "{escaped_folder}" then\n'
         "            set p to pl\n"
         "            exit repeat\n"
-        "        else if pOrphan is missing value then\n"
-        "            set pOrphan to pl\n"
         "        end if\n"
         "    end repeat\n"
-        "    if p is missing value and pOrphan is not missing value then\n"
-        "        try\n"
-        "            move pOrphan to folderRef\n"
-        "            set p to pOrphan\n"
-        "        end try\n"
-        "    end if\n"
         # 3. Still nothing → create a fresh playlist and move it under the
         #    folder. ``set parent of p to ...`` is silently a no-op on recent
         #    Music.app, ``move`` is the documented verb that actually works.
