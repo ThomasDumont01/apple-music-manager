@@ -40,6 +40,7 @@ import unicodedata
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from music_manager.core.config import Paths
@@ -70,6 +71,9 @@ _DEEZER_RESOLVE_WORKERS = 8
 _TOP_ARTIST_FALLBACK_LIMIT = 5
 _GENRE_BONUS = 12.0
 _ARTIST_BONUS = 6.0
+_LOCAL_ARTIST_PLAYCOUNT_BONUS_MAX = 18.0
+_RECENT_RELEASE_BONUS_MAX = 18.0
+_RECENT_RELEASE_DAYS = 365
 
 # Quality filters / boosts
 _MIN_LASTFM_MATCH = 0.30
@@ -834,6 +838,8 @@ def _dedup_and_rank(
     Scoring on top of the Last.fm match base (``match * 100``):
     - +12 if the candidate genre is one of the user's top genres
     - +6  if the candidate artist is one of the user's top artists
+    - up to +18 for artists the user actually plays a lot locally
+    - up to +18 for recent releases (linear decay over one year)
     - up to +25 from a log-scaled Last.fm playcount (popularity safety)
 
     When ``signals`` is provided and adaptive learning has enough history
@@ -847,6 +853,7 @@ def _dedup_and_rank(
     """
     top_genres = {name.lower() for name, _count in profile.top_genres}
     top_artists = {name.lower() for name, _score in profile.top_artists}
+    local_artist_playcounts = _local_artist_playcounts(tracks_store)
     artist_affinity = signals.artist_affinity() if signals else {}
     genre_affinity = signals.genre_affinity() if signals else {}
     is_discovery = mode == "discovery"
@@ -883,6 +890,8 @@ def _dedup_and_rank(
             candidate.score += _GENRE_BONUS
         if candidate.artist and candidate.artist.lower() in top_artists:
             candidate.score += _ARTIST_BONUS
+        _apply_local_artist_playcount_bonus(candidate, local_artist_playcounts)
+        _apply_recent_release_bonus(candidate)
         if candidate.playcount > 0:
             # log10(1e7) ≈ 7 → 7 * 3.5 ≈ 24.5, capped at _PLAYCOUNT_LOG_BONUS_MAX.
             candidate.score += min(
@@ -898,6 +907,71 @@ def _dedup_and_rank(
 
     kept.sort(key=lambda item: item.score, reverse=True)
     return _diversify_by_artist(kept), counters
+
+
+def _local_artist_playcounts(tracks_store: Tracks) -> dict[str, int]:
+    """Aggregate Apple Music play_count by artist from the local library."""
+    counts: dict[str, int] = {}
+    for entry in tracks_store.all().values():
+        artist = str(entry.get("artist") or "").strip().lower()
+        if not artist:
+            continue
+        try:
+            play_count = int(entry.get("play_count") or 0)
+        except (TypeError, ValueError):
+            play_count = 0
+        if play_count <= 0:
+            continue
+        counts[artist] = counts.get(artist, 0) + play_count
+    return counts
+
+
+def _apply_local_artist_playcount_bonus(
+    candidate: RecommendationCandidate,
+    local_artist_playcounts: dict[str, int],
+) -> None:
+    """Boost candidates by artists the user repeatedly plays locally."""
+    if not candidate.artist:
+        return
+    play_count = local_artist_playcounts.get(candidate.artist.lower(), 0)
+    if play_count <= 0:
+        return
+    candidate.score += min(
+        math.log1p(play_count) * 4.0,
+        _LOCAL_ARTIST_PLAYCOUNT_BONUS_MAX,
+    )
+
+
+def _apply_recent_release_bonus(
+    candidate: RecommendationCandidate,
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Boost newer releases so recommendations do not overfit old favorites."""
+    release_date = (candidate.track.release_date or "").strip()
+    if not release_date:
+        return
+    released_at = _parse_release_date(release_date)
+    if released_at is None:
+        return
+    current = now or datetime.now(UTC)
+    if released_at.tzinfo is None:
+        released_at = released_at.replace(tzinfo=UTC)
+    age_days = max(0, (current - released_at).days)
+    if age_days > _RECENT_RELEASE_DAYS:
+        return
+    freshness = 1.0 - (age_days / _RECENT_RELEASE_DAYS)
+    candidate.score += _RECENT_RELEASE_BONUS_MAX * freshness
+
+
+def _parse_release_date(value: str) -> datetime | None:
+    """Parse Deezer album release dates without raising."""
+    for fmt, width in (("%Y-%m-%d", 10), ("%Y-%m", 7), ("%Y", 4)):
+        try:
+            return datetime.strptime(value[:width], fmt).replace(tzinfo=UTC)
+        except ValueError:
+            continue
+    return None
 
 
 def _apply_discovery_bonuses(

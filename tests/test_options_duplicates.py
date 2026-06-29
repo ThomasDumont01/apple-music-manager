@@ -5,7 +5,9 @@ from unittest.mock import patch
 
 from music_manager.options.find_duplicates import (
     best_version,
+    dedup_playlist,
     find_duplicates,
+    find_playlist_internal_duplicates,
     group_key,
     ignore_group,
     load_ignored,
@@ -331,3 +333,134 @@ def test_load_ignored_empty(tmp_path: Path) -> None:
     """No prefs file → empty set."""
     ignored = load_ignored(str(tmp_path / "nonexistent.json"))
     assert ignored == set()
+
+
+# ── find_playlist_internal_duplicates ────────────────────────────────────────
+
+
+@patch("music_manager.options.find_duplicates.list_playlists_with_tracks", return_value=[])
+def test_pl_dupes_no_playlist(_mock, tmp_path: Path) -> None:
+    """No playlist → empty."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    assert find_playlist_internal_duplicates(store) == []
+
+
+@patch(
+    "music_manager.options.find_duplicates.list_playlists_with_tracks",
+    return_value=[("My Mix", "", ["A1", "A2", "A3"])],
+)
+def test_pl_dupes_playlist_without_dupes(_mock, tmp_path: Path) -> None:
+    """Playlist with all unique ids → not reported."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    assert find_playlist_internal_duplicates(store) == []
+
+
+@patch(
+    "music_manager.options.find_duplicates.list_playlists_with_tracks",
+    return_value=[("My Mix", "", ["A1", "A2", "A1"])],
+)
+def test_pl_dupes_single_duplicate(_mock, tmp_path: Path) -> None:
+    """Same persistent_id 2× → group with count=2."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    store.add("A1", {"title": "Song A", "artist": "Art A"})
+    groups = find_playlist_internal_duplicates(store)
+    assert len(groups) == 1
+    grp = groups[0]
+    assert grp["playlist_name"] == "My Mix"
+    assert grp["parent"] == ""
+    assert grp["ordered_ids"] == ["A1", "A2", "A1"]
+    assert grp["duplicates"] == [
+        {"_apple_id": "A1", "count": 2, "title": "Song A", "artist": "Art A"}
+    ]
+
+
+@patch(
+    "music_manager.options.find_duplicates.list_playlists_with_tracks",
+    return_value=[("Mix", "", ["A1", "A1", "A1"])],
+)
+def test_pl_dupes_triple(_mock, tmp_path: Path) -> None:
+    """Same id 3× → count=3."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    store.add("A1", {"title": "Song", "artist": "Art"})
+    groups = find_playlist_internal_duplicates(store)
+    assert groups[0]["duplicates"][0]["count"] == 3
+
+
+@patch(
+    "music_manager.options.find_duplicates.list_playlists_with_tracks",
+    return_value=[
+        ("Mix 1", "", ["A1", "A1"]),
+        ("Mix 2", "Folder", ["B1", "B2", "B1"]),
+        ("Clean", "", ["C1", "C2"]),
+    ],
+)
+def test_pl_dupes_multiple_playlists(_mock, tmp_path: Path) -> None:
+    """Multiple playlists with dupes → one group each, clean playlists skipped."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    store.add("A1", {"title": "X", "artist": "Y"})
+    groups = find_playlist_internal_duplicates(store)
+    assert len(groups) == 2
+    names = sorted(g["playlist_name"] for g in groups)
+    assert names == ["Mix 1", "Mix 2"]
+    mix2 = next(g for g in groups if g["playlist_name"] == "Mix 2")
+    assert mix2["parent"] == "Folder"
+
+
+@patch(
+    "music_manager.options.find_duplicates.list_playlists_with_tracks",
+    return_value=[("Mix", "", ["UNKNOWN", "UNKNOWN"])],
+)
+def test_pl_dupes_metadata_fallback(_mock, tmp_path: Path) -> None:
+    """Missing apple_id in store → entry with empty title/artist (no crash)."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    groups = find_playlist_internal_duplicates(store)
+    assert groups[0]["duplicates"] == [
+        {"_apple_id": "UNKNOWN", "count": 2, "title": "", "artist": ""}
+    ]
+
+
+@patch(
+    "music_manager.options.find_duplicates.list_playlists_with_tracks",
+    return_value=[("Mix", "", ["A1", "B1", "A1", "B1", "C1"])],
+)
+def test_pl_dupes_two_duplicates_in_same_playlist(_mock, tmp_path: Path) -> None:
+    """Two different ids each duplicated → both reported in one group."""
+    store = Tracks(str(tmp_path / "tracks.json"))
+    groups = find_playlist_internal_duplicates(store)
+    assert len(groups) == 1
+    counts = {d["_apple_id"]: d["count"] for d in groups[0]["duplicates"]}
+    assert counts == {"A1": 2, "B1": 2}
+
+
+# ── dedup_playlist ─────────────────────────────────────────────────────────
+
+
+@patch("music_manager.options.find_duplicates.rebuild_playlist")
+def test_dedup_playlist_preserves_order(mock_rebuild) -> None:
+    """[A, B, A, C, B] → [A, B, C], returns 2."""
+    removed = dedup_playlist("Mix", ["A", "B", "A", "C", "B"])
+    assert removed == 2
+    mock_rebuild.assert_called_once_with("Mix", ["A", "B", "C"])
+
+
+@patch("music_manager.options.find_duplicates.rebuild_playlist")
+def test_dedup_playlist_no_dupes_noop(mock_rebuild) -> None:
+    """No duplicates → 0 returned, rebuild NOT called."""
+    removed = dedup_playlist("Mix", ["A", "B", "C"])
+    assert removed == 0
+    mock_rebuild.assert_not_called()
+
+
+@patch("music_manager.options.find_duplicates.rebuild_playlist")
+def test_dedup_playlist_empty(mock_rebuild) -> None:
+    """Empty list → 0, no rebuild."""
+    assert dedup_playlist("Mix", []) == 0
+    mock_rebuild.assert_not_called()
+
+
+@patch("music_manager.options.find_duplicates.rebuild_playlist")
+def test_dedup_playlist_all_same(mock_rebuild) -> None:
+    """[A, A, A] → [A], removes 2."""
+    removed = dedup_playlist("Mix", ["A", "A", "A"])
+    assert removed == 2
+    mock_rebuild.assert_called_once_with("Mix", ["A"])

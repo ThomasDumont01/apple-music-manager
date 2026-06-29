@@ -157,11 +157,40 @@ def download_cover(track: Track, paths: Paths, albums_store: Albums) -> str:
             if os.path.isfile(existing):
                 return existing
 
-    from music_manager.services.resolver import download_cover_file  # noqa: PLC0415
+    from music_manager.services.resolver import (  # noqa: PLC0415
+        download_cover_file,
+        search_itunes_covers,
+    )
 
     unique_id = track.album_id or track.isrc or track.deezer_id
     cover_name = f"cover_{unique_id}"
-    return download_cover_file(cover_url, paths.tmp_dir, cover_name)
+    cover_path = download_cover_file(cover_url, paths.tmp_dir, cover_name)
+    if cover_path:
+        return cover_path
+
+    # Best-effort fallback: the cached Deezer/iTunes URL can be stale or
+    # blocked. Re-query iTunes once and try the best matching artwork URL.
+    for item in search_itunes_covers(track.album, track.artist):
+        fallback_url = str(item.get("url") or "")
+        if not fallback_url or fallback_url == cover_url:
+            continue
+        cover_path = download_cover_file(fallback_url, paths.tmp_dir, cover_name)
+        if cover_path:
+            log_event(
+                "cover_fallback_used",
+                isrc=track.isrc,
+                album=track.album,
+                artist=track.artist,
+            )
+            return cover_path
+
+    log_event(
+        "cover_download_failed",
+        isrc=track.isrc,
+        album=track.album,
+        artist=track.artist,
+    )
+    return ""
 
 
 def _download_with_retry(url: str, output_dir: str) -> tuple[str | None, int | None]:

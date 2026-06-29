@@ -35,9 +35,17 @@ _ITUNES_LIB_BUNDLE = "/System/Library/Frameworks/iTunesLibrary.framework"
 def main(args: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="music_manager playlist-local-tracks")
     parser.add_argument("name", help="Apple Music playlist name")
+    parser.add_argument(
+        "--persistent-id",
+        default="",
+        help=(
+            "16-char hex Apple Music persistentID — disambiguates same-named "
+            "playlists. Falls back to name lookup when empty."
+        ),
+    )
     parsed = parser.parse_args(args)
 
-    items = _load_playlist_items(parsed.name)
+    items = _load_playlist_items(parsed.name, parsed.persistent_id)
     if items is None:
         sys.stdout.write(json.dumps({"error": "not_found"}))
         return 1
@@ -91,8 +99,12 @@ def _load_tracks_index() -> dict[str, dict]:
     }
 
 
-def _load_playlist_items(name: str) -> list[dict] | None:
-    """Return [{apple_id, title, artist}] for the named playlist via iTunesLibrary.
+def _load_playlist_items(name: str, persistent_id: str = "") -> list[dict] | None:
+    """Return [{apple_id, title, artist}] for the playlist via iTunesLibrary.
+
+    Resolution: if ``persistent_id`` is provided, match on it (exact, unique).
+    Otherwise fall back to case-insensitive name match — ambiguous when two
+    playlists share a name.
 
     Returns None if iTunesLibrary is unavailable or the playlist doesn't exist.
     """
@@ -114,12 +126,21 @@ def _load_playlist_items(name: str) -> list[dict] | None:
     except Exception:  # noqa: BLE001
         return None
 
-    target = (name or "").strip().lower()
+    target_pid = (persistent_id or "").strip().upper()
+    target_name = (name or "").strip().lower()
     for playlist in library.allPlaylists():
         try:
-            pl_name = str(playlist.name() or "").strip()
-            if pl_name.lower() != target:
-                continue
+            if target_pid:
+                try:
+                    pl_pid = format(int(playlist.persistentID()), "016X")
+                except Exception:  # noqa: BLE001
+                    continue
+                if pl_pid != target_pid:
+                    continue
+            else:
+                pl_name = str(playlist.name() or "").strip()
+                if pl_name.lower() != target_name:
+                    continue
             items = playlist.items() or []
             tracks: list[dict] = []
             for item in items:

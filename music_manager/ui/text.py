@@ -308,7 +308,13 @@ DUP_SKIP = "Passer"
 DUP_IGNORE = "Ignorer définitivement"
 DUP_REMOVING = "Suppression en cours..."
 
+DUP_PL_HEADER = "Playlist : {name}"
+DUP_PL_FOLDER_HEADER = "{folder} / {name}"
+DUP_PL_DEDUPE = "Retirer les doublons de la playlist"
+DUP_PL_REMOVING = "Dédoublonnage en cours..."
+
 HELP_DUP = "↑↓  naviguer    ⏎  garder    s  passer    p  écouter    esc  retour"
+HELP_DUP_PL = "↑↓  naviguer    ⏎  valider    s  passer    esc  retour"
 
 # ── Recommendations labels ────────────────────────────────────────────────
 

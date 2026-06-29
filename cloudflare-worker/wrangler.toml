@@ -1,0 +1,10 @@
+name = "music-manager-logs"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "LOGS_BUCKET"
+bucket_name = "music-manager-logs"
+
+[vars]
+APP_SECRET = "pFc3f3miLIZdrVV0ECWRHBr1j1SfyHIK3vWSj6tDqAlKqPF8T31Vq2blPQgMhJm2"

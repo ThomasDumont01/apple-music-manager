@@ -923,12 +923,70 @@ def render_duplicate_group(
     return body
 
 
-def render_duplicates_summary(removed: int, skipped: int, ignored: int) -> Text:
+def render_playlist_duplicate_group(
+    group: dict,
+    cursor: int,
+    idx: int,
+    total: int,
+    actions: list[str],
+) -> Text:
+    """Render a single playlist with internal duplicates for review.
+
+    cursor: position across actions (entries are read-only).
+    idx/total: group number for separator.
+    """
+    body = Text()
+
+    body.append_text(render_review_separator(idx, total))
+
+    playlist_name = group.get("playlist_name", "")
+    parent = group.get("parent", "")
+    if parent:
+        header_text = f"Playlist : {parent} / {playlist_name}"
+    else:
+        header_text = f"Playlist : {playlist_name}"
+    body.append(f"  {header_text}\n\n", style=f"bold {BLUE}")
+
+    duplicates = group.get("duplicates", [])
+    for entry in duplicates:
+        title = entry.get("title", "")
+        artist = entry.get("artist", "")
+        apple_id = entry.get("_apple_id", "")
+        count = entry.get("count", 2)
+        label = title or apple_id
+        body.append(f"  {MARKER_EMPTY}")
+        body.append(label)
+        if artist:
+            body.append(f" — {artist}", style="dim")
+        body.append(f"  ×{count}", style="dim")
+        body.append("\n")
+
+    body.append(f"\n  {SEP * 3}\n", style="dim")
+
+    for j, action in enumerate(actions):
+        is_active = j == cursor
+        marker = MARKER if is_active else MARKER_EMPTY
+
+        if is_active:
+            body.append(f"  {marker}", style=f"bold {BLUE}")
+            body.append(action, style=f"bold {BLUE}")
+        else:
+            body.append(f"  {marker}{action}")
+        body.append("\n")
+
+    return body
+
+
+def render_duplicates_summary(
+    removed: int, skipped: int, ignored: int, playlist_removed: int = 0
+) -> Text:
     """Duplicates removal summary."""
     txt = Text()
     parts = []
     if removed:
         parts.append(f"{removed} doublon(s) supprimé(s)")
+    if playlist_removed:
+        parts.append(f"{playlist_removed} retiré(s) des playlists")
     if skipped:
         parts.append(f"{skipped} passé(s)")
     if ignored:

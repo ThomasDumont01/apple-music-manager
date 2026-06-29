@@ -1,5 +1,6 @@
 """Tests for pipeline/recommend.py — end-to-end recommendation flow."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -417,6 +418,52 @@ def test_dedup_and_rank_non_discovery_does_not_apply_cold_bonus(stores) -> None:
         [cold], recommend.Profile(), tracks, recs, signals=None, mode="library"
     )
     assert kept[0].score == 50.0
+
+
+# ── Listening/freshness ranking boosts ─────────────────────────────────────
+
+
+def test_dedup_and_rank_boosts_heavily_played_local_artist(stores) -> None:
+    tracks, _, recs = stores
+    tracks.add(
+        "AP_FAN",
+        {
+            "isrc": "OLD1",
+            "title": "Favorite",
+            "artist": "FanArtist",
+            "play_count": 80,
+        },
+    )
+    familiar = _make_candidate(isrc="FAM1", artist="FanArtist", base_score=50.0)
+    unknown = _make_candidate(isrc="UNK1", artist="UnknownArtist", base_score=55.0)
+
+    kept, _ = recommend._dedup_and_rank(
+        [unknown, familiar], recommend.Profile(), tracks, recs, signals=None
+    )
+
+    assert kept[0].isrc == "FAM1"
+    assert kept[0].score > kept[1].score
+
+
+def test_apply_recent_release_bonus_prefers_new_music() -> None:
+    now = datetime.now(UTC)
+    recent = _make_candidate(isrc="NEW1", base_score=50.0)
+    recent.track.release_date = (now - timedelta(days=10)).strftime("%Y-%m-%d")
+    old = _make_candidate(isrc="OLD1", base_score=50.0)
+    old.track.release_date = (now - timedelta(days=700)).strftime("%Y-%m-%d")
+
+    recommend._apply_recent_release_bonus(recent, now=now)
+    recommend._apply_recent_release_bonus(old, now=now)
+
+    assert recent.score > old.score
+    assert old.score == 50.0
+
+
+def test_apply_recent_release_bonus_invalid_date_noop() -> None:
+    candidate = _make_candidate(base_score=50.0)
+    candidate.track.release_date = "not-a-date"
+    recommend._apply_recent_release_bonus(candidate)
+    assert candidate.score == 50.0
 
 
 # ── _apply_affinity ─────────────────────────────────────────────────────────

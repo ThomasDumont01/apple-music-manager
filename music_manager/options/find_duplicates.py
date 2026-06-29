@@ -2,7 +2,11 @@
 
 from music_manager.core.io import load_json, save_json
 from music_manager.core.normalize import first_artist, normalize
-from music_manager.services.apple import delete_tracks
+from music_manager.services.apple import (
+    delete_tracks,
+    list_playlists_with_tracks,
+    rebuild_playlist,
+)
 from music_manager.services.tracks import Tracks
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -81,6 +85,72 @@ def load_ignored(preferences_path: str) -> set[str]:
     prefs = load_json(preferences_path)
     raw = prefs.get("ignored_duplicates", [])
     return set(raw) if isinstance(raw, list) else set()
+
+
+def find_playlist_internal_duplicates(tracks_store: Tracks) -> list[dict]:
+    """Detect playlists where the same persistent_id appears two or more times.
+
+    Returns one entry per affected playlist:
+        {
+            "playlist_name": str,
+            "parent": str,
+            "ordered_ids": [original ids in order],
+            "duplicates": [
+                {"_apple_id": str, "count": int, "title": str, "artist": str},
+                ...
+            ],
+        }
+    Metadata is best-effort: title/artist come from tracks_store; fallback
+    to empty strings when the apple_id is unknown to the store.
+    """
+    playlists = list_playlists_with_tracks()
+    groups: list[dict] = []
+    for name, parent, ordered_ids in playlists:
+        counts: dict[str, int] = {}
+        for apple_id in ordered_ids:
+            counts[apple_id] = counts.get(apple_id, 0) + 1
+        dupes = [(aid, n) for aid, n in counts.items() if n >= 2]
+        if not dupes:
+            continue
+        duplicates: list[dict] = []
+        for apple_id, count in dupes:
+            entry = tracks_store.get_by_apple_id(apple_id) or {}
+            duplicates.append(
+                {
+                    "_apple_id": apple_id,
+                    "count": count,
+                    "title": entry.get("title", ""),
+                    "artist": entry.get("artist", ""),
+                }
+            )
+        groups.append(
+            {
+                "playlist_name": name,
+                "parent": parent,
+                "ordered_ids": list(ordered_ids),
+                "duplicates": duplicates,
+            }
+        )
+    return groups
+
+
+def dedup_playlist(playlist_name: str, ordered_ids: list[str]) -> int:
+    """Rebuild a playlist with each persistent_id kept only once (first occurrence).
+
+    Returns the number of occurrences removed (``0`` if no duplicate found).
+    """
+    seen: set[str] = set()
+    unique_ids: list[str] = []
+    for apple_id in ordered_ids:
+        if apple_id in seen:
+            continue
+        seen.add(apple_id)
+        unique_ids.append(apple_id)
+    removed = len(ordered_ids) - len(unique_ids)
+    if removed == 0:
+        return 0
+    rebuild_playlist(playlist_name, unique_ids)
+    return removed
 
 
 # ── Private Functions ────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ Output shape::
         ...
       ],
       "playlists": [
-        {"name": "...", "count": 42},
+        {"name": "...", "persistent_id": "ABCD...", "count": 42},
         ...
       ]
     }
@@ -137,15 +137,14 @@ def _playlists(limit: int) -> list[dict]:
     widget can build a URL like ``url("music-manager.assets/abc.jpg")``.
     """
     try:
-        from music_manager.services.apple import (  # noqa: PLC0415
-            RECO_FOLDER_NAME,
-        )
         from music_manager.services.playlist_covers import (  # noqa: PLC0415
             list_playlists_with_covers,
         )
 
+        # Exclut le dossier "for me" (recos Apple Music) : ces playlists
+        # ne doivent jamais apparaître dans le widget, même via "Voir tout".
         raw = list_playlists_with_covers(
-            _WIDGET_COVERS_DIR, exclude_folder=RECO_FOLDER_NAME
+            _WIDGET_COVERS_DIR, exclude_folder="for me"
         )
     except Exception:  # noqa: BLE001
         return []
@@ -168,6 +167,7 @@ def _playlists(limit: int) -> list[dict]:
         items.append(
             {
                 "name": name,
+                "persistent_id": str(entry.get("persistent_id") or ""),
                 "count": int(entry.get("count") or 0),
                 "cover_filename": cover_filename,
                 "is_favorite": bool(entry.get("is_favorite")),

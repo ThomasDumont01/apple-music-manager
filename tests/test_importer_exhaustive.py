@@ -153,6 +153,29 @@ def test_cover_reuse_existing_file(tmp_path: Path) -> None:
     assert result == cover_file  # reused, no HTTP
 
 
+def test_cover_download_falls_back_to_itunes_search(tmp_path: Path) -> None:
+    """If the cached cover URL fails, try a fresh iTunes artwork result."""
+    paths = _paths(tmp_path)
+    albums = Albums(str(tmp_path / "a.json"))
+    albums.put(1, {"cover_url": "https://stale-cover.jpg"})
+
+    with (
+        patch(
+            "music_manager.services.resolver.download_cover_file",
+            side_effect=["", "/tmp/fallback.jpg"],
+        ) as mock_download,
+        patch(
+            "music_manager.services.resolver.search_itunes_covers",
+            return_value=[{"url": "https://fresh-cover.jpg"}],
+        ) as mock_search,
+    ):
+        result = download_cover(_track(album_id=1), paths, albums)
+
+    assert result == "/tmp/fallback.jpg"
+    assert mock_download.call_count == 2
+    mock_search.assert_called_once_with("Album", "Artist")
+
+
 def test_cleanup_covers_only_removes_cover_files(tmp_path: Path) -> None:
     """cleanup_covers removes cover_* files but keeps others."""
     os.makedirs(str(tmp_path / "tmp"), exist_ok=True)

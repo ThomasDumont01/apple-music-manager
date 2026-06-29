@@ -179,7 +179,17 @@ class MenuScreenCore(_Base):
         self._dup_idx = 0
         self._dup_cursor = 0
         self._dup_actions: list[str] = []
-        self._dup_result: dict = {"removed": 0, "skipped": 0, "ignored": 0}
+        self._dup_result: dict = {
+            "removed": 0,
+            "skipped": 0,
+            "ignored": 0,
+            "playlist_removed": 0,
+        }
+        self._dup_pl_groups: list[dict] = []
+        self._dup_pl_idx = 0
+        self._dup_pl_cursor = 0
+        self._dup_pl_actions: list[str] = []
+        self._dup_phase = "library"
 
         # Unmatched tracks (album edition change)
         self._modify_unmatched: list = []
@@ -536,6 +546,9 @@ class MenuScreenCore(_Base):
         if self._view == "duplicates":
             self._dup_move(direction)
             return
+        if self._view == "duplicates_playlist":
+            self._dup_pl_move(direction)
+            return
         if self._view == "maintenance_confirm":
             self._modify_cursor = (self._modify_cursor + direction) % 2
             self._refresh_maintenance_confirm()
@@ -617,6 +630,9 @@ class MenuScreenCore(_Base):
             return  # cannot interrupt a running generation
         if self._view == "duplicates":
             self._dup_select()
+            return
+        if self._view == "duplicates_playlist":
+            self._dup_pl_select()
             return
         if self._view == "maintenance_confirm":
             if self._modify_cursor == 0:
@@ -784,7 +800,7 @@ class MenuScreenCore(_Base):
         """S key."""
         if self._view == "search_input":
             return
-        if self._view == "duplicates":
+        if self._view in ("duplicates", "duplicates_playlist"):
             self._dup_skip()
             return
         if self._view == "identify_album_pick":
@@ -902,7 +918,12 @@ class MenuScreenCore(_Base):
             # Esc = cancel delete
             self._modify_cursor = 0
             self._show_modify_actions()
-        elif self._view in ("duplicates", "dup_removing"):
+        elif self._view in (
+            "duplicates",
+            "dup_removing",
+            "duplicates_playlist",
+            "dup_pl_removing",
+        ):
             self._switch_view("tools")
             return
         elif self._view == "maintenance_confirm":

@@ -17,6 +17,7 @@ from music_manager.services.apple import (
     get_playlist_tracks_in_folder,
     import_file,
     list_playlists,
+    list_playlists_with_tracks,
     playlist_exists_in_folder,
     rebuild_playlist,
     set_artwork,
@@ -337,6 +338,46 @@ def test_get_playlist_tracks_returns_ids(mock_run) -> None:
     result = get_playlist_tracks("Test")
 
     assert result == ["AAA", "BBB", "CCC"]
+
+
+# ── list_playlists_with_tracks ──────────────────────────────────────────────
+
+
+@patch(_PATCH)
+def test_list_playlists_with_tracks_parses(mock_run) -> None:
+    """Parses bulk playlist scan with per-playlist track IDs."""
+
+    mock_run.return_value = (
+        "PLAYLIST:Rock Mix|||\n"
+        "AAA\n"
+        "BBB\n"
+        "PLAYLIST:Workout|||Folder\n"
+        "CCC\n"
+        "AAA\n"
+        "CCC\n"
+    )
+    result = list_playlists_with_tracks()
+
+    assert result == [
+        ("Rock Mix", "", ["AAA", "BBB"]),
+        ("Workout", "Folder", ["CCC", "AAA", "CCC"]),
+    ]
+
+
+@patch(_PATCH, return_value=None)
+def test_list_playlists_with_tracks_empty(_mock_run) -> None:
+    """Empty AppleScript output → empty list."""
+
+    assert list_playlists_with_tracks() == []
+
+
+@patch(_PATCH)
+def test_list_playlists_with_tracks_empty_playlist(mock_run) -> None:
+    """Playlist with no tracks → entry with empty id list."""
+
+    mock_run.return_value = "PLAYLIST:Empty|||\n"
+    result = list_playlists_with_tracks()
+    assert result == [("Empty", "", [])]
 
 
 # ── get_playlist_membership (folder-aware) ──────────────────────────────────

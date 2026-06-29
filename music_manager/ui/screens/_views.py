@@ -49,7 +49,9 @@ class View(Enum):
 
     # Duplicates
     DUPLICATES = "duplicates"
+    DUPLICATES_PLAYLIST = "duplicates_playlist"
     DUP_REMOVING = "dup_removing"
+    DUP_PL_REMOVING = "dup_pl_removing"
 
     # Maintenance
     MAINTENANCE_CONFIRM = "maintenance_confirm"

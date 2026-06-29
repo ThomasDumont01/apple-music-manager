@@ -375,6 +375,66 @@ def get_playlist_membership_detailed(
     return playlists
 
 
+def list_playlists_with_tracks() -> list[tuple[str, str, list[str]]]:
+    """Scan every non-smart user playlist with its track list.
+
+    Returns ``[(playlist_name, parent_folder_or_empty, [ordered_ids]), ...]``.
+    A single AppleScript call streams the whole library — used by the
+    duplicates flow to detect identical persistent IDs appearing twice
+    within the same playlist.
+    """
+    script = (
+        'tell application "Music"\n'
+        '    set output to ""\n'
+        "    repeat with p in user playlists\n"
+        "        if smart of p is false then\n"
+        "            set pName to name of p\n"
+        '            set parentName to ""\n'
+        "            try\n"
+        "                set parentName to name of parent of p\n"
+        "            end try\n"
+        '            set output to output & "PLAYLIST:" & pName'
+        ' & "|||" & parentName & linefeed\n'
+        "            repeat with t in tracks of p\n"
+        "                set output to output"
+        " & persistent ID of t & linefeed\n"
+        "            end repeat\n"
+        "        end if\n"
+        "    end repeat\n"
+        "    return output\n"
+        "end tell"
+    )
+    result = run_applescript(script)
+    if not result:
+        return []
+
+    playlists: list[tuple[str, str, list[str]]] = []
+    current_name = ""
+    current_parent = ""
+    current_ids: list[str] = []
+
+    def flush() -> None:
+        if not current_name:
+            return
+        playlists.append((current_name, current_parent, list(current_ids)))
+
+    for line in result.strip().splitlines():
+        if line.startswith("PLAYLIST:"):
+            flush()
+            header = line[9:]
+            parts = header.split("|||", 1)
+            current_name = parts[0]
+            current_parent = parts[1] if len(parts) > 1 else ""
+            current_ids = []
+        else:
+            stripped = line.strip()
+            if stripped:
+                current_ids.append(stripped)
+    flush()
+
+    return playlists
+
+
 def rebuild_playlist(playlist_name: str, apple_ids: list[str]) -> None:
     """Clear a playlist and re-add tracks in the given order."""
     if not apple_ids:

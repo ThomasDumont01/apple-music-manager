@@ -38,9 +38,11 @@ def list_playlists_with_covers(
 ) -> list[dict]:
     """Return user playlists + Apple-Music-extracted artwork (cached on disk).
 
-    Each item: ``{"name": str, "count": int, "cover_path": str | "",
-    "is_favorite": bool}``. ``cover_path`` is empty when the playlist has no
-    artwork set in Apple Music.
+    Each item: ``{"name": str, "persistent_id": str, "count": int,
+    "cover_path": str | "", "is_favorite": bool}``. ``persistent_id`` is the
+    16-char hex Apple Music persistentID — stable across renames and unique
+    across same-named playlists. ``cover_path`` is empty when the playlist has
+    no artwork set in Apple Music.
 
     If ``exclude_folder`` is given, playlists whose parent folder bears that
     name are omitted from the result. Used to hide the ``for me`` recommendation
@@ -117,6 +119,10 @@ def list_playlists_with_covers(
                     continue
                 if _parent_name(playlist, id_to_name) == exclude_folder:
                     continue
+            try:
+                persistent_id = format(int(playlist.persistentID()), "016X")
+            except Exception:  # noqa: BLE001
+                persistent_id = ""
             cover_path = _extract_playlist_artwork(playlist, auto_dir)
             items = playlist.items()
             count = len(items) if items else 0
@@ -127,6 +133,7 @@ def list_playlists_with_covers(
             result.append(
                 {
                     "name": name,
+                    "persistent_id": persistent_id,
                     "count": count,
                     "cover_path": cover_path,
                     "is_favorite": is_favorite,
