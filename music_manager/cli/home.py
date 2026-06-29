@@ -36,8 +36,18 @@ _DEFAULT_PLAYLIST_LIMIT = 30
 
 # Covers live next to the widget JSX so Übersicht can load them with a
 # relative URL — `file://` paths to other folders are blocked by WebKit.
-_WIDGET_COVERS_DIR = os.path.expanduser(
+_DEFAULT_WIDGET_COVERS_DIR = os.path.expanduser(
     "~/Library/Application Support/Übersicht/widgets/music-manager.assets"
+)
+_SYNCED_WIDGET_COVERS_DIR = (
+    "/Users/thomas/SynologyDrive/perso/codage/Übersicht/widgets/"
+    "music-manager.assets"
+)
+_WIDGET_COVERS_DIR = os.environ.get(
+    "MUSIC_MANAGER_WIDGET_ASSETS_DIR",
+    _SYNCED_WIDGET_COVERS_DIR
+    if os.path.isdir(os.path.dirname(_SYNCED_WIDGET_COVERS_DIR))
+    else _DEFAULT_WIDGET_COVERS_DIR,
 )
 
 # Apple Music ships with built-in smart playlists that pollute the list.
@@ -125,7 +135,7 @@ def _format_recent(entry: dict, apple_id: str) -> dict:
 
 
 def _playlists(limit: int) -> list[dict]:
-    """Return user playlists with cached first-track JPG covers.
+    """Return user playlists with cached local covers.
 
     Covers are extracted on first access via iTunesLibrary (PyObjC) and
     stored under ``~/Library/Application Support/Übersicht/widgets/
@@ -133,8 +143,8 @@ def _playlists(limit: int) -> list[dict]:
     URL — Übersicht's WebKit blocks ``file://`` cross-origin loads but
     accepts paths relative to the widget directory.
 
-    Returns each entry with ``cover_filename`` (just the basename) so the
-    widget can build a URL like ``url("music-manager.assets/abc.jpg")``.
+    Returns each entry with ``cover_filename`` and ``mosaic_cover_filenames``
+    so the widget can build URLs like ``music-manager.assets/abc.jpg``.
     """
     try:
         from music_manager.services.playlist_covers import (  # noqa: PLC0415
@@ -164,15 +174,30 @@ def _playlists(limit: int) -> list[dict]:
             cover_filename = os.path.basename(cover_path)
         else:
             cover_filename = ""
+        mosaic_cover_filenames = [
+            _asset_filename(path)
+            for path in entry.get("mosaic_cover_paths") or []
+            if _asset_filename(path)
+        ][:4]
         items.append(
             {
                 "name": name,
                 "persistent_id": str(entry.get("persistent_id") or ""),
                 "count": int(entry.get("count") or 0),
                 "cover_filename": cover_filename,
+                "mosaic_cover_filenames": mosaic_cover_filenames,
                 "is_favorite": bool(entry.get("is_favorite")),
             }
         )
         if len(items) >= limit:
             break
     return items
+
+
+def _asset_filename(path: object) -> str:
+    raw = str(path or "")
+    if not raw:
+        return ""
+    if raw.startswith(_WIDGET_COVERS_DIR + os.sep):
+        return os.path.relpath(raw, _WIDGET_COVERS_DIR)
+    return os.path.basename(raw)

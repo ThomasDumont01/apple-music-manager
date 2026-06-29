@@ -45,7 +45,11 @@ def main(args: list[str]) -> int:
     )
     parsed = parser.parse_args(args)
 
-    items = _load_playlist_items(parsed.name, parsed.persistent_id)
+    items = (
+        _load_playlist_items(parsed.name, parsed.persistent_id)
+        if parsed.persistent_id
+        else _load_playlist_items(parsed.name)
+    )
     if items is None:
         sys.stdout.write(json.dumps({"error": "not_found"}))
         return 1

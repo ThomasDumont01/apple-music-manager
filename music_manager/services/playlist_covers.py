@@ -39,10 +39,12 @@ def list_playlists_with_covers(
     """Return user playlists + Apple-Music-extracted artwork (cached on disk).
 
     Each item: ``{"name": str, "persistent_id": str, "count": int,
-    "cover_path": str | "", "is_favorite": bool}``. ``persistent_id`` is the
-    16-char hex Apple Music persistentID — stable across renames and unique
-    across same-named playlists. ``cover_path`` is empty when the playlist has
-    no artwork set in Apple Music.
+    "cover_path": str | "", "mosaic_cover_paths": list[str],
+    "is_favorite": bool}``. ``persistent_id`` is the 16-char hex Apple Music
+    persistentID — stable across renames and unique across same-named
+    playlists. ``cover_path`` is empty when the playlist has no artwork set in
+    Apple Music; in that case ``mosaic_cover_paths`` contains up to four
+    extracted track artworks for the widget's Apple Music-style mosaic.
 
     If ``exclude_folder`` is given, playlists whose parent folder bears that
     name are omitted from the result. Used to hide the ``for me`` recommendation
@@ -123,8 +125,11 @@ def list_playlists_with_covers(
                 persistent_id = format(int(playlist.persistentID()), "016X")
             except Exception:  # noqa: BLE001
                 persistent_id = ""
-            cover_path = _extract_playlist_artwork(playlist, auto_dir)
             items = playlist.items()
+            cover_path = _extract_playlist_artwork(playlist, auto_dir)
+            mosaic_cover_paths = (
+                [] if cover_path else _extract_track_artworks(items, auto_dir)
+            )
             count = len(items) if items else 0
             is_favorite = (
                 name in favorited_names
@@ -136,6 +141,7 @@ def list_playlists_with_covers(
                     "persistent_id": persistent_id,
                     "count": count,
                     "cover_path": cover_path,
+                    "mosaic_cover_paths": mosaic_cover_paths,
                     "is_favorite": is_favorite,
                 }
             )
@@ -269,6 +275,69 @@ def _extract_playlist_artwork(playlist: object, auto_dir: str) -> str:
                             continue
             except OSError:
                 pass
+        return full_path
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _extract_track_artworks(items: object, auto_dir: str, limit: int = 4) -> list[str]:
+    """Extract up to ``limit`` track artworks for playlist fallback mosaics."""
+    if not items:
+        return []
+    paths: list[str] = []
+    seen: set[str] = set()
+    try:
+        iterable = list(items)
+    except Exception:  # noqa: BLE001
+        return []
+    for item in iterable:
+        if len(paths) >= limit:
+            break
+        path = _extract_item_artwork(item, auto_dir)
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        paths.append(path)
+    return paths
+
+
+def _extract_item_artwork(item: object, auto_dir: str) -> str:
+    """Extract one track artwork to ``auto/track_<pid>_<uuid>.<ext>``."""
+    try:
+        if not hasattr(item, "hasArtworkAvailable"):
+            return ""
+        if not bool(item.hasArtworkAvailable()):  # type: ignore[attr-defined]
+            return ""
+        if not hasattr(item, "artwork"):
+            return ""
+        art = item.artwork()  # type: ignore[attr-defined]
+        if art is None:
+            return ""
+        try:
+            pid = format(int(item.persistentID()), "016X")  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            return ""
+        uuid = ""
+        try:
+            uuid = str(item.artworkUUID() or "")[:8]  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            pass
+        ext = ".png"
+        try:
+            fmt = int(art.imageDataFormat())
+            ext = _ARTWORK_EXT.get(fmt, ".png")
+        except Exception:  # noqa: BLE001
+            pass
+
+        filename = f"track_{pid}_{uuid}{ext}" if uuid else f"track_{pid}{ext}"
+        full_path = os.path.join(auto_dir, filename)
+
+        if not os.path.isfile(full_path):
+            data = art.imageData()
+            if not data or not len(data):
+                return ""
+            with open(full_path, "wb") as handle:
+                handle.write(bytes(data))
         return full_path
     except Exception:  # noqa: BLE001
         return ""
