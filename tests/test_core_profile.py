@@ -113,12 +113,18 @@ def test_build_profile_recent_add_bonus() -> None:
     new_date = _today_iso()
     tracks = {
         "old": {
-            "isrc": "OLD", "title": "S1", "artist": "A1",
-            "loved": True, "added_date": old_date,
+            "isrc": "OLD",
+            "title": "S1",
+            "artist": "A1",
+            "loved": True,
+            "added_date": old_date,
         },
         "new": {
-            "isrc": "NEW", "title": "S2", "artist": "A2",
-            "loved": True, "added_date": new_date,
+            "isrc": "NEW",
+            "title": "S2",
+            "artist": "A2",
+            "loved": True,
+            "added_date": new_date,
         },
     }
     profile = build_profile(tracks)
@@ -224,16 +230,20 @@ def test_build_profile_empty_playlist_filter_yields_empty_profile() -> None:
 def test_build_profile_playlist_filter_combined_with_mode() -> None:
     tracks = {
         "AP1": {
-            "isrc": "R", "title": "S", "artist": "A",
-            "genre": "Rock", "loved": True,
+            "isrc": "R",
+            "title": "S",
+            "artist": "A",
+            "genre": "Rock",
+            "loved": True,
         },
         "AP2": {
-            "isrc": "P", "title": "S2", "artist": "B",
-            "genre": "Pop", "loved": True,
+            "isrc": "P",
+            "title": "S2",
+            "artist": "B",
+            "genre": "Pop",
+            "loved": True,
         },
     }
-    profile = build_profile(
-        tracks, mode="playlist:Workout", playlist_apple_ids={"AP1"}
-    )
+    profile = build_profile(tracks, mode="playlist:Workout", playlist_apple_ids={"AP1"})
     isrcs = {isrc for isrc, _, _ in profile.top_tracks}
     assert isrcs == {"R"}

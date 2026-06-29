@@ -26,7 +26,7 @@ from music_manager.services.apple import run_applescript
 _APPLE_ID_RE = re.compile(r"^[A-F0-9]{16}$")
 _MUSIC_APP = "/System/Applications/Music.app"
 _BOOT_DELAY = 5.0  # seconds — let Music load library + init audio engine
-                    # when freshly launched (first click after reboot)
+# when freshly launched (first click after reboot)
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────

@@ -12,9 +12,7 @@ def test_writes_cancel_flag(
 ) -> None:
     data_root = tmp_path / "music"
     data_root.mkdir()
-    monkeypatch.setattr(
-        import_cancel, "load_config", lambda: {"data_root": str(data_root)}
-    )
+    monkeypatch.setattr(import_cancel, "load_config", lambda: {"data_root": str(data_root)})
     # CONFIG_DIR is used by Paths for widget_cancel_path → patch via env-style.
     config_dir = tmp_path / "config"
     monkeypatch.setattr("music_manager.core.config.CONFIG_DIR", str(config_dir))
@@ -43,9 +41,7 @@ def test_idempotent_multiple_calls(
     data_root = tmp_path / "music"
     data_root.mkdir()
     config_dir = tmp_path / "config"
-    monkeypatch.setattr(
-        import_cancel, "load_config", lambda: {"data_root": str(data_root)}
-    )
+    monkeypatch.setattr(import_cancel, "load_config", lambda: {"data_root": str(data_root)})
     monkeypatch.setattr("music_manager.core.config.CONFIG_DIR", str(config_dir))
     import_cancel.main([])
     capsys.readouterr()

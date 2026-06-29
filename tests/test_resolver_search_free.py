@@ -8,9 +8,7 @@ from music_manager.services.resolver import search_deezer_free
 def test_search_free_returns_data_array() -> None:
     """Successful Deezer response → the inner data array is returned."""
     payload = {"data": [{"id": 1, "title": "T"}]}
-    with patch(
-        "music_manager.services.resolver.deezer_get", return_value=payload
-    ):
+    with patch("music_manager.services.resolver.deezer_get", return_value=payload):
         result = search_deezer_free("billie eilish")
     assert result == [{"id": 1, "title": "T"}]
 

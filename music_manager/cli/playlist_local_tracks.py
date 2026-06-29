@@ -96,11 +96,7 @@ def _load_tracks_index() -> dict[str, dict]:
     if not os.path.isfile(paths.tracks_path):
         return {}
     data = load_json(paths.tracks_path)
-    return {
-        key: entry
-        for key, entry in data.items()
-        if isinstance(entry, dict)
-    }
+    return {key: entry for key, entry in data.items() if isinstance(entry, dict)}
 
 
 def _load_playlist_items(name: str, persistent_id: str = "") -> list[dict] | None:
@@ -149,13 +145,11 @@ def _load_playlist_items(name: str, persistent_id: str = "") -> list[dict] | Non
             tracks: list[dict] = []
             for item in items:
                 try:
-                    persistent_id = int(item.persistentID())
+                    persistent_id = item.persistentID()
                     apple_id = format(persistent_id, "016X")
                     title = str(item.title() or "")
                     artist_obj = item.artist()
-                    artist = (
-                        str(artist_obj.name() or "") if artist_obj else ""
-                    )
+                    artist = str(artist_obj.name() or "") if artist_obj else ""
                     tracks.append(
                         {
                             "apple_id": apple_id,

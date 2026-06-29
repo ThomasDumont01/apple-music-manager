@@ -101,9 +101,7 @@ def test_skips_local_tracks(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_get(endpoint: str) -> dict:
         if "/tracks" not in endpoint:
             return _meta()
-        return _track_page(
-            [{"track": _track(is_local=True)}, {"track": _track(isrc="USX1")}]
-        )
+        return _track_page([{"track": _track(is_local=True)}, {"track": _track(isrc="USX1")}])
 
     monkeypatch.setattr(spotify, "spotify_get", mock_get)
     out = spotify.fetch_spotify_playlist_preview("ABC")
@@ -115,9 +113,7 @@ def test_skips_tracks_without_isrc(monkeypatch: pytest.MonkeyPatch) -> None:
     def mock_get(endpoint: str) -> dict:
         if "/tracks" not in endpoint:
             return _meta()
-        return _track_page(
-            [{"track": _track(isrc="")}, {"track": _track(isrc="USX1")}]
-        )
+        return _track_page([{"track": _track(isrc="")}, {"track": _track(isrc="USX1")}])
 
     monkeypatch.setattr(spotify, "spotify_get", mock_get)
     out = spotify.fetch_spotify_playlist_preview("ABC")
@@ -128,9 +124,7 @@ def test_skips_tracks_without_isrc(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_paginates_via_next(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
     pages = [
-        _track_page(
-            [{"track": _track(isrc=f"USX{i:04d}")} for i in range(100)], has_next=True
-        ),
+        _track_page([{"track": _track(isrc=f"USX{i:04d}")} for i in range(100)], has_next=True),
         _track_page([{"track": _track(isrc="USXLAST")}]),
     ]
 

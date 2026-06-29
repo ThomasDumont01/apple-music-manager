@@ -289,6 +289,7 @@ def format_wait(seconds: int) -> str:
     hours = seconds // 3600
     return f"{hours}h"
 
+
 # ── Identify labels ────────────────────────────────────────────────────────
 
 IDENTIFY_TITLE = "Identifier la bibliothèque"

@@ -947,9 +947,7 @@ class ModifyMixin(_MixinBase):
         body = RichText()
         if self._modify_selected_track:
             trk = self._modify_selected_track
-            body.append(
-                f"\n  {_WARN}  Supprimer cette piste ?\n\n", style="yellow"
-            )
+            body.append(f"\n  {_WARN}  Supprimer cette piste ?\n\n", style="yellow")
             body.append(f"     {trk.title} — {trk.artist}\n\n", style="dim")
         elif self._modify_selected_album:
             alb = self._modify_selected_album

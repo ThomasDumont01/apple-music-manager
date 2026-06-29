@@ -320,16 +320,24 @@ class MenuScreenCore(_Base):
         if prompt_type == "found":
             self._cookies_options = ["Utiliser les cookies Safari", "Ignorer"]
             self._view = "cookies_prompt"
-            self._set_body(render_cookies_prompt(
-                COOKIES_FOUND, self._cookies_options, self._cookies_cursor,
-            ))
+            self._set_body(
+                render_cookies_prompt(
+                    COOKIES_FOUND,
+                    self._cookies_options,
+                    self._cookies_cursor,
+                )
+            )
             self._set_help("↑↓  naviguer    ⏎  valider")
         elif prompt_type == "missing":
             self._cookies_options = ["Ouvrir Safari pour se connecter", "Ignorer"]
             self._view = "cookies_prompt"
-            self._set_body(render_cookies_prompt(
-                COOKIES_NOT_FOUND, self._cookies_options, self._cookies_cursor,
-            ))
+            self._set_body(
+                render_cookies_prompt(
+                    COOKIES_NOT_FOUND,
+                    self._cookies_options,
+                    self._cookies_cursor,
+                )
+            )
             self._set_help("↑↓  naviguer    ⏎  valider")
         elif prompt_type == "wait_login":
             from rich.text import Text as RichText  # noqa: PLC0415
@@ -411,9 +419,7 @@ class MenuScreenCore(_Base):
             return
 
         self._selectable = [
-            i
-            for i, item in enumerate(self._items)
-            if item is not None and item[0] != "__sep__"
+            i for i, item in enumerate(self._items) if item is not None and item[0] != "__sep__"
         ]
         self.query_one("#menu-body", Static).display = True
         self._refresh_menu()

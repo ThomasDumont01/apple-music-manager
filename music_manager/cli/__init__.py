@@ -104,13 +104,13 @@ def _print_usage() -> None:
     print(
         "Usage: python -m music_manager <command> [args]\n"
         "Commands:\n"
-        "  search \"query\" [--limit N]\n"
-        "  search-playlists \"query\" [--limit N]\n"
+        '  search "query" [--limit N]\n'
+        '  search-playlists "query" [--limit N]\n'
         "  playlist-tracks DEEZER_PLAYLIST_ID [--max N]\n"
-        "  import-isrcs ISRC1,ISRC2,... [--playlist-name \"Name\"] [--detach]\n"
+        '  import-isrcs ISRC1,ISRC2,... [--playlist-name "Name"] [--detach]\n'
         "  import-status\n"
         "  play APPLE_ID\n"
-        "  play-playlist \"Playlist Name\"\n"
+        '  play-playlist "Playlist Name"\n'
         "  shuffle\n"
         "  home [--recent-limit N] [--playlist-limit N]\n"
         "  spotify-login [--detach] [--timeout SECONDS]\n"

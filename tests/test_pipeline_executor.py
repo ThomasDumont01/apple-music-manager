@@ -59,14 +59,20 @@ def test_empty_input(_env) -> None:
 @patch(f"{_PATCH}._cleanup_file")
 @patch("music_manager.services.youtube._MIN_SEARCH_INTERVAL", 0)
 def test_single_track_success(
-    mock_cleanup, mock_cover, mock_search, mock_dl, mock_strip,
-    mock_tag, mock_import, mock_log, _env,
+    mock_cleanup,
+    mock_cover,
+    mock_search,
+    mock_dl,
+    mock_strip,
+    mock_tag,
+    mock_import,
+    mock_log,
+    _env,
 ) -> None:
     """Single track flows through all 3 stages successfully."""
     paths, tracks, albums = _env
     mock_search.return_value = [
-        {"url": "https://yt/v1", "id": "v1", "title": "Song",
-         "channel": "Topic", "duration": 200},
+        {"url": "https://yt/v1", "id": "v1", "title": "Song", "channel": "Topic", "duration": 200},
     ]
 
     track = _make_track()
@@ -124,8 +130,15 @@ def test_download_fails_creates_pending(mock_cover, mock_search, mock_dl, mock_l
 @patch(f"{_PATCH}._cleanup_file")
 @patch("music_manager.services.youtube._MIN_SEARCH_INTERVAL", 0)
 def test_apple_import_fails_creates_pending(
-    mock_cleanup, mock_cover, mock_search, mock_dl, mock_strip,
-    mock_tag, mock_import, mock_log, _env,
+    mock_cleanup,
+    mock_cover,
+    mock_search,
+    mock_dl,
+    mock_strip,
+    mock_tag,
+    mock_import,
+    mock_log,
+    _env,
 ) -> None:
     """Apple Music import failure → PendingTrack."""
     paths, tracks, albums = _env
@@ -178,7 +191,11 @@ def test_cancellation_stops_pipeline(mock_cover, mock_search, mock_log, _env) ->
 
     items = [(_make_track(f"ISRC{i}"), "", "", "") for i in range(10)]
     run_import_pipeline(
-        items, paths, tracks, albums, should_cancel=should_cancel,
+        items,
+        paths,
+        tracks,
+        albums,
+        should_cancel=should_cancel,
     )
 
     # Should not have processed all 10
@@ -193,7 +210,13 @@ def test_cancellation_stops_pipeline(mock_cover, mock_search, mock_log, _env) ->
 @patch(f"{_PATCH}._cleanup_file")
 @patch("music_manager.services.youtube._MIN_SEARCH_INTERVAL", 0)
 def test_duration_suspect_creates_pending(
-    mock_cleanup, mock_strip, mock_cover, mock_search, mock_dl, mock_log, _env,
+    mock_cleanup,
+    mock_strip,
+    mock_cover,
+    mock_search,
+    mock_dl,
+    mock_log,
+    _env,
 ) -> None:
     """Duration ratio outside 0.93-1.07 → pending with reason=duration_suspect."""
     paths, tracks, albums = _env
@@ -230,6 +253,7 @@ def test_download_retry_succeeds_on_second() -> None:
 
 def test_download_retry_exhausted_returns_none() -> None:
     """All attempts fail → (None, None)."""
+
     def download_fn(url, output_dir):
         raise RuntimeError("permanent")
 

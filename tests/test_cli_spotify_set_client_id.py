@@ -15,9 +15,7 @@ def test_valid_client_id_saves(
         "music_manager.cli.spotify_set_client_id.save_config",
         saved.update,
     )
-    exit_code = spotify_set_client_id.main(
-        ["abcdef0123456789abcdef0123456789"]
-    )
+    exit_code = spotify_set_client_id.main(["abcdef0123456789abcdef0123456789"])
     assert exit_code == 0
     out = json.loads(capsys.readouterr().out)
     assert out == {"status": "ok"}
@@ -76,9 +74,7 @@ def test_too_short_rejected(
     assert out["error"] == "invalid_client_id_format"
 
 
-def test_too_long_rejected(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_too_long_rejected(capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "music_manager.cli.spotify_set_client_id.save_config",
         lambda updates: None,
@@ -87,9 +83,7 @@ def test_too_long_rejected(
     assert exit_code == 1
 
 
-def test_non_hex_rejected(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_non_hex_rejected(capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "music_manager.cli.spotify_set_client_id.save_config",
         lambda updates: None,

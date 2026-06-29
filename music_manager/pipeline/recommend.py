@@ -205,9 +205,7 @@ def generate_recommendations(
             playlist_apple_ids = set(apple.get_playlist_tracks(seed_playlist_name))
         except Exception:  # noqa: BLE001
             playlist_apple_ids = set()
-    profile = build_profile(
-        tracks_store.all(), mode=mode, playlist_apple_ids=playlist_apple_ids
-    )
+    profile = build_profile(tracks_store.all(), mode=mode, playlist_apple_ids=playlist_apple_ids)
 
     # D. Candidates (with negative reinforcement on bad seeds).
     seed_blacklist_ratio = recs_store.seed_quality()
@@ -237,7 +235,10 @@ def generate_recommendations(
     apple_ids: list[str] = []
     for idx, candidate in enumerate(top, start=1):
         pending = import_resolved_track(
-            candidate.track, paths, tracks_store, albums_store,
+            candidate.track,
+            paths,
+            tracks_store,
+            albums_store,
         )
         if pending is None and candidate.track.apple_id:
             apple_ids.append(candidate.track.apple_id)
@@ -405,9 +406,7 @@ def scan_outcomes(
         return counts
 
     if not current and not apple.playlist_exists_in_folder(folder_name, playlist_name):
-        log_event(
-            "recommend_playlist_missing", folder=folder_name, playlist=playlist_name
-        )
+        log_event("recommend_playlist_missing", folder=folder_name, playlist=playlist_name)
         return counts
 
     missing_entries = [
@@ -582,9 +581,7 @@ def _detect_deltas(
             counts["playcount"] += 1
 
         if loved_changed or current_count != last_count:
-            recs_store.update_snapshot(
-                isrc, loved=current_loved, playcount=current_count
-            )
+            recs_store.update_snapshot(isrc, loved=current_loved, playcount=current_count)
     return counts
 
 
@@ -860,8 +857,7 @@ def _dedup_and_rank(
     known_artists: set[str] = set()
     if is_discovery:
         known_artists = {
-            str(entry.get("artist") or "").lower()
-            for entry in tracks_store.all().values()
+            str(entry.get("artist") or "").lower() for entry in tracks_store.all().values()
         }
         known_artists.discard("")
     counters = {"blacklist": 0, "active": 0, "library": 0, "empty_isrc": 0}
@@ -894,9 +890,7 @@ def _dedup_and_rank(
         _apply_recent_release_bonus(candidate)
         if candidate.playcount > 0:
             # log10(1e7) ≈ 7 → 7 * 3.5 ≈ 24.5, capped at _PLAYCOUNT_LOG_BONUS_MAX.
-            candidate.score += min(
-                math.log10(candidate.playcount) * 3.5, _PLAYCOUNT_LOG_BONUS_MAX
-            )
+            candidate.score += min(math.log10(candidate.playcount) * 3.5, _PLAYCOUNT_LOG_BONUS_MAX)
 
         _apply_affinity(candidate, artist_affinity, genre_affinity)
 

@@ -250,7 +250,7 @@ def apple_ids_exist(apple_ids: list[str]) -> set[str]:
         "        try\n"
         "            set _t to first track of library playlist 1"
         " whose persistent ID is (tid as string)\n"
-        '            set output to output & (tid as string) & linefeed\n'
+        "            set output to output & (tid as string) & linefeed\n"
         "        end try\n"
         "    end repeat\n"
         "    return output\n"
@@ -582,9 +582,7 @@ def playlist_exists_in_folder(folder_name: str, playlist_name: str) -> bool:
     return bool(result) and result.strip().lower() == "true"
 
 
-def get_playlist_tracks_in_folder(
-    folder_name: str, playlist_name: str
-) -> list[str]:
+def get_playlist_tracks_in_folder(folder_name: str, playlist_name: str) -> list[str]:
     """Return persistent IDs of tracks in ``folder_name/playlist_name``, in order."""
     if not folder_name or not playlist_name:
         return []
@@ -639,7 +637,7 @@ def add_to_playlist_in_folder(
         "    try\n"
         f'        set folderRef to folder playlist "{escaped_folder}"\n'
         "    on error\n"
-        f'        set folderRef to make new folder playlist '
+        f"        set folderRef to make new folder playlist "
         f'with properties {{name:"{escaped_folder}"}}\n'
         "    end try\n"
         # 2. Find an existing playlist of the right name *inside* the target
@@ -661,7 +659,7 @@ def add_to_playlist_in_folder(
         #    folder. ``set parent of p to ...`` is silently a no-op on recent
         #    Music.app, ``move`` is the documented verb that actually works.
         "    if p is missing value then\n"
-        f'        set p to make new user playlist '
+        f"        set p to make new user playlist "
         f'with properties {{name:"{escaped_playlist}"}}\n'
         "        try\n"
         "            move p to folderRef\n"

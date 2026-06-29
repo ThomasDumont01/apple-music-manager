@@ -124,9 +124,7 @@ def test_scan_outcomes_all_present_no_op(stores, tmp_path: Path) -> None:
     assert signals.count() == 0
 
 
-def test_scan_outcomes_classifies_adopted_kept_rejected(
-    stores, tmp_path: Path
-) -> None:
+def test_scan_outcomes_classifies_adopted_kept_rejected(stores, tmp_path: Path) -> None:
     _, _, recs = stores
     _seed_active(recs, "ADO1", "AP_ADO", artist="AdoptedArt", genre="Rock")
     _seed_active(recs, "KEEP1", "AP_KEEP", artist="KeptArt", genre="Pop")
@@ -173,9 +171,7 @@ def test_scan_outcomes_classifies_adopted_kept_rejected(
     ]
 
 
-def test_scan_outcomes_inter_for_me_move_classified_as_adopted(
-    stores, tmp_path: Path
-) -> None:
+def test_scan_outcomes_inter_for_me_move_classified_as_adopted(stores, tmp_path: Path) -> None:
     """Moving a track from ``for me/library`` to ``for me/rock`` counts as adoption.
 
     The user is explicitly re-categorising the reco into a different sub-playlist
@@ -229,9 +225,7 @@ def test_scan_outcomes_filters_by_playlist_field(stores, tmp_path: Path) -> None
             "music_manager.pipeline.recommend.apple.playlist_exists_in_folder",
             return_value=True,
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.apple_ids_exist", return_value=set()
-        ),
+        patch("music_manager.pipeline.recommend.apple.apple_ids_exist", return_value=set()),
     ):
         counts = recommend.scan_outcomes(recs, signals, playlist_name="library")
     assert counts == {"adopted_playlist": 0, "kept_library": 0, "rejected": 1}
@@ -239,9 +233,7 @@ def test_scan_outcomes_filters_by_playlist_field(stores, tmp_path: Path) -> None
     assert recs.is_active("Y1")  # untouched
 
 
-def test_scan_outcomes_missing_playlist_no_classification(
-    stores, tmp_path: Path
-) -> None:
+def test_scan_outcomes_missing_playlist_no_classification(stores, tmp_path: Path) -> None:
     """If the playlist is absent from the folder, we DO NOT mass-classify."""
     _, _, recs = stores
     _seed_active(recs, "X1", "AP1")
@@ -275,9 +267,7 @@ def test_scan_outcomes_apple_failure_returns_zeros(stores, tmp_path: Path) -> No
     assert recs.is_active("X1")
 
 
-def test_scan_outcomes_entry_without_apple_id_is_skipped(
-    stores, tmp_path: Path
-) -> None:
+def test_scan_outcomes_entry_without_apple_id_is_skipped(stores, tmp_path: Path) -> None:
     _, _, recs = stores
     recs.add_active(
         {
@@ -310,9 +300,12 @@ def test_append_unique_default_filters_low_match() -> None:
     candidates: list[dict] = []
     seen: set[tuple[str, str]] = set()
     recommend._append_unique(
-        candidates, seen,
+        candidates,
+        seen,
         {"name": "S", "artist": "A", "match": 0.2},
-        source="lastfm_similar", seed_isrc="", mode="library",
+        source="lastfm_similar",
+        seed_isrc="",
+        mode="library",
     )
     assert candidates == []
 
@@ -321,9 +314,12 @@ def test_append_unique_default_accepts_high_match() -> None:
     candidates: list[dict] = []
     seen: set[tuple[str, str]] = set()
     recommend._append_unique(
-        candidates, seen,
+        candidates,
+        seen,
         {"name": "S", "artist": "A", "match": 0.9},
-        source="lastfm_similar", seed_isrc="", mode="library",
+        source="lastfm_similar",
+        seed_isrc="",
+        mode="library",
     )
     assert len(candidates) == 1
 
@@ -332,9 +328,12 @@ def test_append_unique_discovery_drops_too_low_match() -> None:
     candidates: list[dict] = []
     seen: set[tuple[str, str]] = set()
     recommend._append_unique(
-        candidates, seen,
+        candidates,
+        seen,
         {"name": "S", "artist": "A", "match": 0.3},
-        source="lastfm_similar", seed_isrc="", mode="discovery",
+        source="lastfm_similar",
+        seed_isrc="",
+        mode="discovery",
     )
     assert candidates == []
 
@@ -343,9 +342,12 @@ def test_append_unique_discovery_drops_too_high_match() -> None:
     candidates: list[dict] = []
     seen: set[tuple[str, str]] = set()
     recommend._append_unique(
-        candidates, seen,
+        candidates,
+        seen,
         {"name": "S", "artist": "A", "match": 0.85},
-        source="lastfm_similar", seed_isrc="", mode="discovery",
+        source="lastfm_similar",
+        seed_isrc="",
+        mode="discovery",
     )
     assert candidates == []
 
@@ -354,9 +356,12 @@ def test_append_unique_discovery_accepts_mid_match() -> None:
     candidates: list[dict] = []
     seen: set[tuple[str, str]] = set()
     recommend._append_unique(
-        candidates, seen,
+        candidates,
+        seen,
         {"name": "S", "artist": "A", "match": 0.55},
-        source="lastfm_similar", seed_isrc="", mode="discovery",
+        source="lastfm_similar",
+        seed_isrc="",
+        mode="discovery",
     )
     assert len(candidates) == 1
 
@@ -372,9 +377,7 @@ def test_apply_discovery_bonus_cold_artist() -> None:
 
 def test_apply_discovery_malus_familiar_artist() -> None:
     candidate = _make_candidate(artist="FamiliarArtist", base_score=50.0)
-    recommend._apply_discovery_bonuses(
-        candidate, {"familiarartist"}, {"familiarartist"}
-    )
+    recommend._apply_discovery_bonuses(candidate, {"familiarartist"}, {"familiarartist"})
     assert candidate.score == 50.0 - recommend._DISCOVERY_FAMILIARITY_MALUS
 
 
@@ -410,9 +413,7 @@ def test_dedup_and_rank_discovery_boosts_cold_artist(stores) -> None:
 
 def test_dedup_and_rank_non_discovery_does_not_apply_cold_bonus(stores) -> None:
     tracks, _, recs = stores
-    tracks.add(
-        "AP1", {"isrc": "K1", "title": "T", "artist": "KnownArtist", "loved": True}
-    )
+    tracks.add("AP1", {"isrc": "K1", "title": "T", "artist": "KnownArtist", "loved": True})
     cold = _make_candidate(isrc="C1", artist="NeverSeen", base_score=50.0)
     kept, _ = recommend._dedup_and_rank(
         [cold], recommend.Profile(), tracks, recs, signals=None, mode="library"
@@ -478,8 +479,13 @@ def _make_candidate(
     base_score: float = 50.0,
 ) -> recommend.RecommendationCandidate:
     track = Track(
-        isrc=isrc, title=title, artist=artist, album="Album",
-        genre=genre, deezer_id=1, album_id=10,
+        isrc=isrc,
+        title=title,
+        artist=artist,
+        album="Album",
+        genre=genre,
+        deezer_id=1,
+        album_id=10,
     )
     return recommend.RecommendationCandidate(
         isrc=isrc,
@@ -550,17 +556,13 @@ def test_dedup_and_rank_no_signals_works_like_before(stores) -> None:
     assert len(kept) == 1
 
 
-def test_dedup_and_rank_applies_affinity_when_signals_given(
-    stores, tmp_path: Path
-) -> None:
+def test_dedup_and_rank_applies_affinity_when_signals_given(stores, tmp_path: Path) -> None:
     tracks, _, recs = stores
     signals = SignalsLog(str(tmp_path / "signals.jsonl"))
     for i in range(3):
         signals.log("recommend_rejected", isrc=f"X{i}", artist="BadArt", genre="Rock")
     for i in range(3):
-        signals.log(
-            "recommend_adopted_playlist", isrc=f"Y{i}", artist="GoodArt", genre="Pop"
-        )
+        signals.log("recommend_adopted_playlist", isrc=f"Y{i}", artist="GoodArt", genre="Pop")
 
     bad = _make_candidate(isrc="BAD1", artist="BadArt", genre="Rock", base_score=50.0)
     good = _make_candidate(isrc="GOOD1", artist="GoodArt", genre="Pop", base_score=50.0)
@@ -708,9 +710,7 @@ def test_detect_deltas_ignores_outcomes_section(stores, tmp_path: Path) -> None:
     assert signals.count() == 0
 
 
-def test_detect_deltas_loved_and_playcount_both_change(
-    stores, tmp_path: Path
-) -> None:
+def test_detect_deltas_loved_and_playcount_both_change(stores, tmp_path: Path) -> None:
     tracks, _, recs = stores
     tracks.add(
         "AP1",
@@ -856,12 +856,8 @@ def test_generate_dedup_skips_blacklist(stores, paths, with_api_key) -> None:
             "music_manager.pipeline.recommend.fetch_album_with_cover",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
-        patch(
-            "music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -945,9 +941,7 @@ def test_generate_dedup_skips_library(stores, paths, with_api_key) -> None:
         patch(
             "music_manager.pipeline.recommend.import_resolved_track", return_value=None
         ) as mock_import,
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -968,8 +962,7 @@ def test_generate_ranks_top_target_count(stores, paths, with_api_key) -> None:
     _seed_loved(tracks, "SEED1", "Song", "Artist")
 
     similar = [
-        {"name": f"T{i}", "artist": f"Art{i}", "mbid": "", "match": i / 100.0}
-        for i in range(50)
+        {"name": f"T{i}", "artist": f"Art{i}", "mbid": "", "match": i / 100.0} for i in range(50)
     ]
     deezer_results = {
         f"T{i}_Art{i}": [_deezer_match(f"REC{i:03d}", f"T{i}", f"Art{i}")] for i in range(50)
@@ -992,12 +985,8 @@ def test_generate_ranks_top_target_count(stores, paths, with_api_key) -> None:
             "music_manager.pipeline.recommend.fetch_album_with_cover",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
-        patch(
-            "music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -1027,9 +1016,7 @@ def test_generate_isrc_not_on_deezer_dropped(stores, paths, with_api_key) -> Non
         patch(
             "music_manager.pipeline.recommend.import_resolved_track", return_value=None
         ) as mock_import,
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -1044,24 +1031,30 @@ def test_generate_isrc_not_on_deezer_dropped(stores, paths, with_api_key) -> Non
     assert result.imported == 0
 
 
-def test_generate_uses_playlist_seeds_in_playlist_mode(
-    stores, paths, with_api_key
-) -> None:
+def test_generate_uses_playlist_seeds_in_playlist_mode(stores, paths, with_api_key) -> None:
     """mode='playlist:Workout' restricts the profile to the playlist's tracks."""
     tracks, albums, recs = stores
     # Two loved tracks; only AP_IN is in the "Workout" playlist.
     tracks.add(
         "AP_IN",
         {
-            "isrc": "IN1", "title": "In", "artist": "InArt",
-            "loved": True, "play_count": 10, "deezer_id": 1,
+            "isrc": "IN1",
+            "title": "In",
+            "artist": "InArt",
+            "loved": True,
+            "play_count": 10,
+            "deezer_id": 1,
         },
     )
     tracks.add(
         "AP_OUT",
         {
-            "isrc": "OUT1", "title": "Out", "artist": "OutArt",
-            "loved": True, "play_count": 10, "deezer_id": 2,
+            "isrc": "OUT1",
+            "title": "Out",
+            "artist": "OutArt",
+            "loved": True,
+            "play_count": 10,
+            "deezer_id": 2,
         },
     )
 
@@ -1083,12 +1076,8 @@ def test_generate_uses_playlist_seeds_in_playlist_mode(
             "music_manager.pipeline.recommend.apple.get_playlist_tracks",
             side_effect=fake_playlist_tracks,
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.list_playlists", return_value=[]
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"
-        ),
+        patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
         result = recommend.generate_recommendations(
             mode="playlist:Workout",
@@ -1138,12 +1127,8 @@ def test_generate_discovery_mode_runs_without_crash(stores, paths, with_api_key)
             "music_manager.pipeline.recommend.apple.get_playlist_tracks",
             return_value=[],
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.list_playlists", return_value=[]
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"
-        ) as add_pl,
+        patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder") as add_pl,
     ):
         result = recommend.generate_recommendations(
             mode="discovery",
@@ -1156,9 +1141,7 @@ def test_generate_discovery_mode_runs_without_crash(stores, paths, with_api_key)
     add_pl.assert_called_once_with(recommend.RECO_FOLDER_NAME, "discovery", ["AP_MID1"])
 
 
-def test_generate_logs_imported_and_generation_run_events(
-    stores, paths, with_api_key
-) -> None:
+def test_generate_logs_imported_and_generation_run_events(stores, paths, with_api_key) -> None:
     tracks, albums, recs = stores
     _seed_loved(tracks, "SEED1", "Song", "Artist")
     similar = [{"name": "Hit", "artist": "Pop", "match": 0.9}]
@@ -1186,12 +1169,8 @@ def test_generate_logs_imported_and_generation_run_events(
             "music_manager.pipeline.recommend.apple.get_playlist_tracks",
             return_value=[],
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.list_playlists", return_value=[]
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"
-        ),
+        patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
         recommend.generate_recommendations(
             mode="library",
@@ -1207,9 +1186,7 @@ def test_generate_logs_imported_and_generation_run_events(
     assert "generation_run" in event_types
 
 
-def test_generate_discovery_cold_start_uses_chart_fallback(
-    stores, paths, with_api_key
-) -> None:
+def test_generate_discovery_cold_start_uses_chart_fallback(stores, paths, with_api_key) -> None:
     """Discovery on an empty library falls back to Last.fm chart so it isn't empty."""
     tracks, albums, recs = stores
     # No seed tracks at all → no similar/artist fallback possible.
@@ -1243,12 +1220,8 @@ def test_generate_discovery_cold_start_uses_chart_fallback(
             "music_manager.pipeline.recommend.apple.get_playlist_tracks",
             return_value=[],
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.list_playlists", return_value=[]
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"
-        ),
+        patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
         result = recommend.generate_recommendations(
             mode="discovery",
@@ -1292,16 +1265,10 @@ def test_generate_writes_active_to_store(stores, paths, with_api_key) -> None:
             "music_manager.pipeline.recommend.fetch_album_with_cover",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
-        patch(
-            "music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import
-        ),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
-        patch(
-            "music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"
-        ) as add_playlist,
+        patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder") as add_playlist,
     ):
         result = recommend.generate_recommendations(
             mode="general",
@@ -1313,9 +1280,7 @@ def test_generate_writes_active_to_store(stores, paths, with_api_key) -> None:
 
     assert result.imported == 1
     assert recs.is_active("REC1")
-    add_playlist.assert_called_once_with(
-        recommend.RECO_FOLDER_NAME, "library", ["AP_NEW"]
-    )
+    add_playlist.assert_called_once_with(recommend.RECO_FOLDER_NAME, "library", ["AP_NEW"])
 
     # The active entry carries the playlist target for the next scan_outcomes.
     assert recs.all_active()["REC1"]["playlist"] == "library"
@@ -1348,9 +1313,7 @@ def test_generate_filters_low_match_candidates(stores, paths, with_api_key) -> N
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", return_value=None),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -1373,8 +1336,11 @@ def test_generate_diversifies_by_artist(stores, paths, with_api_key) -> None:
     # 10 candidates all from "PopStar" with descending scores.
     similar = [
         {
-            "name": f"T{i}", "artist": "PopStar", "mbid": "",
-            "match": 0.9 - i * 0.01, "playcount": 1000,
+            "name": f"T{i}",
+            "artist": "PopStar",
+            "mbid": "",
+            "match": 0.9 - i * 0.01,
+            "playcount": 1000,
         }
         for i in range(10)
     ]
@@ -1412,9 +1378,7 @@ def test_generate_diversifies_by_artist(stores, paths, with_api_key) -> None:
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -1486,13 +1450,9 @@ def test_generate_mood_uses_tag_top_tracks(stores, paths, with_api_key) -> None:
         patch(
             "music_manager.services.lastfm.get_top_tracks_by_tag", return_value=tag_results
         ) as tag_mock,
-        patch(
-            "music_manager.services.lastfm.get_similar_tracks", return_value=[]
-        ) as similar_mock,
+        patch("music_manager.services.lastfm.get_similar_tracks", return_value=[]) as similar_mock,
         patch("music_manager.pipeline.recommend.search_track", return_value=[]),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
     ):
@@ -1534,14 +1494,10 @@ def test_generate_calls_cleanup_covers_after_import(stores, paths, with_api_key)
             "music_manager.pipeline.recommend.import_resolved_track",
             side_effect=fake_import,
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
-        patch(
-            "music_manager.pipeline.recommend.cleanup_covers"
-        ) as mock_cleanup,
+        patch("music_manager.pipeline.recommend.cleanup_covers") as mock_cleanup,
     ):
         result = recommend.generate_recommendations(
             mode="general",
@@ -1555,9 +1511,7 @@ def test_generate_calls_cleanup_covers_after_import(stores, paths, with_api_key)
     mock_cleanup.assert_called_once_with(paths.tmp_dir)
 
 
-def test_generate_cleanup_called_even_when_nothing_imported(
-    stores, paths, with_api_key
-) -> None:
+def test_generate_cleanup_called_even_when_nothing_imported(stores, paths, with_api_key) -> None:
     """Cleanup must run even after a 0-import batch (failed imports left files)."""
     tracks, albums, recs = stores
     _seed_loved(tracks, "SEED1", "Song", "Artist")
@@ -1576,14 +1530,10 @@ def test_generate_cleanup_called_even_when_nothing_imported(
             "music_manager.pipeline.recommend.import_resolved_track",
             return_value=object(),  # truthy → counted as failed
         ),
-        patch(
-            "music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]
-        ),
+        patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
-        patch(
-            "music_manager.pipeline.recommend.cleanup_covers"
-        ) as mock_cleanup,
+        patch("music_manager.pipeline.recommend.cleanup_covers") as mock_cleanup,
     ):
         recommend.generate_recommendations(
             mode="general",

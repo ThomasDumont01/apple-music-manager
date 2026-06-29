@@ -11,9 +11,7 @@ def test_logout_clears_tokens(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     called: list[bool] = []
-    monkeypatch.setattr(
-        spotify_logout, "clear_tokens", lambda: called.append(True)
-    )
+    monkeypatch.setattr(spotify_logout, "clear_tokens", lambda: called.append(True))
     exit_code = spotify_logout.main([])
     assert exit_code == 0
     out = json.loads(capsys.readouterr().out)

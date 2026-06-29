@@ -36,13 +36,15 @@ def test_anonymize_strips_various_usernames() -> None:
 
 def test_anonymize_preserves_metadata() -> None:
     """Music metadata (title, artist, ISRC) stays intact."""
-    line = json.dumps({
-        "action": "import_done",
-        "title": "Bohemian Rhapsody",
-        "artist": "Queen",
-        "isrc": "GBAYE7500101",
-        "duration_ms": 354000,
-    })
+    line = json.dumps(
+        {
+            "action": "import_done",
+            "title": "Bohemian Rhapsody",
+            "artist": "Queen",
+            "isrc": "GBAYE7500101",
+            "duration_ms": 354000,
+        }
+    )
     result = _anonymize_logs(line)
     parsed = json.loads(result)
     assert parsed["title"] == "Bohemian Rhapsody"
@@ -54,8 +56,10 @@ def test_anonymize_preserves_metadata() -> None:
 def test_anonymize_multiline() -> None:
     """Handles multiple JSONL lines."""
     lines = (
-        json.dumps({"file": "/Users/bob/Music/a.m4a"}) + "\n"
-        + json.dumps({"file": "/Users/bob/Music/b.m4a"}) + "\n"
+        json.dumps({"file": "/Users/bob/Music/a.m4a"})
+        + "\n"
+        + json.dumps({"file": "/Users/bob/Music/b.m4a"})
+        + "\n"
     )
     result = _anonymize_logs(lines)
     assert result.count("~/Music/") == 2

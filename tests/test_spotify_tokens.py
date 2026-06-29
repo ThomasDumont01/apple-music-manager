@@ -53,9 +53,7 @@ def test_load_tokens_returns_persisted_values(tmp_path, monkeypatch: pytest.Monk
 
 def test_load_tokens_empty_when_no_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("music_manager.core.config.CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        "music_manager.core.config.CONFIG_PATH", str(tmp_path / "config.json")
-    )
+    monkeypatch.setattr("music_manager.core.config.CONFIG_PATH", str(tmp_path / "config.json"))
     tokens = spotify.load_tokens()
     assert tokens["access_token"] == ""
     assert tokens["refresh_token"] == ""

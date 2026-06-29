@@ -37,9 +37,7 @@ _SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 # safe with PKCE flow. Override at runtime via env var or config.
 _SPOTIFY_CLIENT_ID = ""  # set by Thomas after creating the dev app
 _SPOTIFY_REDIRECT_URI = "http://127.0.0.1:8765/callback"
-_SPOTIFY_SCOPES = (
-    "playlist-read-private playlist-read-collaborative user-library-read"
-)
+_SPOTIFY_SCOPES = "playlist-read-private playlist-read-collaborative user-library-read"
 
 _REQUEST_TIMEOUT = 15
 _HEADERS = {"Accept": "application/json"}
@@ -290,9 +288,7 @@ def count_liked_tracks() -> int:
     return int(data.get("total") or 0)
 
 
-def fetch_spotify_playlist_preview(
-    playlist_id: str, max_tracks: int = 500
-) -> dict:
+def fetch_spotify_playlist_preview(playlist_id: str, max_tracks: int = 500) -> dict:
     """Resolve a Spotify playlist into preview-ready track metadata.
 
     Output shape strictly matches Deezer's ``fetch_playlist_preview`` so the
@@ -317,8 +313,7 @@ def fetch_spotify_playlist_preview(
     offset = 0
     page_size = 100
     fields = (
-        "items(track(name,is_local,external_ids,preview_url,"
-        "artists(name),album(images))),next"
+        "items(track(name,is_local,external_ids,preview_url,artists(name),album(images))),next"
     )
     encoded_fields = urllib.parse.quote(fields, safe="")
 

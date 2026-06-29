@@ -37,9 +37,7 @@ def _payload(name: str = "X", tracks: list | None = None, skipped: int = 0) -> d
 def test_outputs_playlist_shape(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(
         spotify_playlist_tracks,
         "fetch_spotify_playlist_preview",
@@ -57,9 +55,7 @@ def test_outputs_playlist_shape(
 def test_liked_id_dispatches_to_fetch_liked(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "load_config", lambda: {"data_root": ""})
     called_with: list[int] = []
 
     def fake_liked(max_tracks: int = 500) -> dict:
@@ -90,8 +86,7 @@ def test_enriches_in_library_from_tracks_json(
     data_root = tmp_path / "music"
     (data_root / ".data").mkdir(parents=True)
     (data_root / ".data" / "tracks.json").write_text(
-        '{"AP_BAD_GUY": {"isrc": "USX111", "title": "Bad Guy", '
-        '"apple_id": "AP_BAD_GUY"}}'
+        '{"AP_BAD_GUY": {"isrc": "USX111", "title": "Bad Guy", "apple_id": "AP_BAD_GUY"}}'
     )
     monkeypatch.setattr(
         spotify_playlist_tracks,
@@ -103,9 +98,7 @@ def test_enriches_in_library_from_tracks_json(
         "fetch_spotify_playlist_preview",
         lambda pid, max_tracks=500: _payload(),
     )
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "apple_ids_exist", lambda ids: {"AP_BAD_GUY"}
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "apple_ids_exist", lambda ids: {"AP_BAD_GUY"})
     spotify_playlist_tracks.main(["ABC"])
     out = json.loads(capsys.readouterr().out)
     assert out["tracks"][0]["in_library"] is True
@@ -134,9 +127,7 @@ def test_drops_orphaned_apple_id(
         "fetch_spotify_playlist_preview",
         lambda pid, max_tracks=500: _payload(),
     )
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "apple_ids_exist", lambda ids: set()
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "apple_ids_exist", lambda ids: set())
     spotify_playlist_tracks.main(["ABC"])
     out = json.loads(capsys.readouterr().out)
     assert out["tracks"][0]["in_library"] is False
@@ -146,35 +137,25 @@ def test_drops_orphaned_apple_id(
 def test_max_flag_forwarded(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "load_config", lambda: {"data_root": ""})
     captured: list[int] = []
 
     def fake_preview(pid: str, max_tracks: int = 500) -> dict:
         captured.append(max_tracks)
         return _payload()
 
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "fetch_spotify_playlist_preview", fake_preview
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "fetch_spotify_playlist_preview", fake_preview)
     spotify_playlist_tracks.main(["ABC", "--max", "120"])
     assert captured == [120]
 
 
-def test_error_response(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "load_config", lambda: {"data_root": ""}
-    )
+def test_error_response(capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(spotify_playlist_tracks, "load_config", lambda: {"data_root": ""})
 
     def raise_err(pid: str, max_tracks: int = 500) -> dict:
         raise RuntimeError("token expired")
 
-    monkeypatch.setattr(
-        spotify_playlist_tracks, "fetch_spotify_playlist_preview", raise_err
-    )
+    monkeypatch.setattr(spotify_playlist_tracks, "fetch_spotify_playlist_preview", raise_err)
     exit_code = spotify_playlist_tracks.main(["ABC"])
     assert exit_code == 1
     out = json.loads(capsys.readouterr().out)

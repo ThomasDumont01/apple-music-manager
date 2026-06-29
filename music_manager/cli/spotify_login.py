@@ -98,11 +98,7 @@ def _run_oauth_flow(timeout: int) -> dict:
     try:
         webbrowser.open(url)
         deadline = time.time() + timeout
-        while (
-            time.time() < deadline
-            and "code" not in received
-            and "error" not in received
-        ):
+        while time.time() < deadline and "code" not in received and "error" not in received:
             time.sleep(0.2)
     finally:
         server.shutdown()
@@ -154,8 +150,7 @@ def _build_callback_server(received: dict, expected_state: str) -> HTTPServer:
                 return
             received["code"] = code
             self._respond_html(
-                "<h2>✓ Connexion réussie</h2>"
-                "<p>Vous pouvez fermer cette fenêtre.</p>"
+                "<h2>✓ Connexion réussie</h2><p>Vous pouvez fermer cette fenêtre.</p>"
             )
 
         def _respond_html(self, body: str) -> None:

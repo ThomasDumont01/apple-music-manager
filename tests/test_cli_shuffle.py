@@ -12,9 +12,7 @@ def test_shuffle_enables_shuffle_and_plays_library(
     capsys: pytest.CaptureFixture,
 ) -> None:
     """Activates Music, enables shuffle, plays library playlist 1."""
-    with patch(
-        "music_manager.cli.shuffle.run_applescript", return_value=""
-    ) as mock_script:
+    with patch("music_manager.cli.shuffle.run_applescript", return_value="") as mock_script:
         code = shuffle.main([])
     assert code == 0
     assert json.loads(capsys.readouterr().out) == {"status": "ok"}

@@ -371,11 +371,16 @@ class TestSnapshotResetFailed:
 
         count = snapshot(tracks)
         assert count == 2
-
-        assert tracks.get_by_apple_id("AP1")["origin"] == "baseline"
-        assert tracks.get_by_apple_id("AP2")["origin"] == "baseline"
+        entry = tracks.get_by_apple_id("AP1")
+        assert entry is not None
+        assert entry["origin"] == "baseline"
+        entry2 = tracks.get_by_apple_id("AP2")
+        assert entry2 is not None
+        assert entry2["origin"] == "baseline"
         # Already baseline — unchanged
-        assert tracks.get_by_apple_id("AP3")["origin"] == "baseline"
+        entry3 = tracks.get_by_apple_id("AP3")
+        assert entry3 is not None
+        assert entry3["origin"] == "baseline"
 
     def test_snapshot_persists_to_disk(self, tmp_path: Path) -> None:
         """After snapshot, reloading store still shows promoted tracks."""
@@ -390,7 +395,9 @@ class TestSnapshotResetFailed:
 
         # Reload from disk
         tracks2 = Tracks(path)
-        assert tracks2.get_by_apple_id("AP1")["origin"] == "baseline"
+        entry = tracks2.get_by_apple_id("AP1")
+        assert entry is not None
+        assert entry["origin"] == "baseline"
 
     def test_reset_failed_clears_status(self, tmp_path: Path) -> None:
         """reset_failed sets status=None and clears fail_reason."""
@@ -409,10 +416,16 @@ class TestSnapshotResetFailed:
         count = reset_failed(tracks)
         assert count == 2
 
-        assert tracks.get_by_apple_id("AP1")["status"] is None
-        assert tracks.get_by_apple_id("AP1")["fail_reason"] == ""
-        assert tracks.get_by_apple_id("AP2")["status"] == "done"  # untouched
-        assert tracks.get_by_apple_id("AP3")["status"] is None
+        entry1 = tracks.get_by_apple_id("AP1")
+        assert entry1 is not None
+        assert entry1["status"] is None
+        assert entry1["fail_reason"] == ""
+        entry2 = tracks.get_by_apple_id("AP2")
+        assert entry2 is not None
+        assert entry2["status"] == "done"  # untouched
+        entry3 = tracks.get_by_apple_id("AP3")
+        assert entry3 is not None
+        assert entry3["status"] is None
 
     def test_reset_failed_persists_dirty_flag(self, tmp_path: Path) -> None:
         """reset_failed uses update() which sets _dirty, then save() persists."""
@@ -428,8 +441,10 @@ class TestSnapshotResetFailed:
 
         # Reload — must reflect the reset
         tracks2 = Tracks(path)
-        assert tracks2.get_by_apple_id("AP1")["status"] is None
-        assert tracks2.get_by_apple_id("AP1")["fail_reason"] == ""
+        entry1 = tracks2.get_by_apple_id("AP1")
+        assert entry1 is not None
+        assert entry1["status"] is None
+        assert entry1["fail_reason"] == ""
 
     def test_snapshot_then_reset_failed_roundtrip(self, tmp_path: Path) -> None:
         """Full lifecycle: import → snapshot → fail → reset → verify."""
@@ -448,7 +463,9 @@ class TestSnapshotResetFailed:
 
         # Snapshot promotes to baseline
         snapshot(tracks)
-        assert tracks.get_by_apple_id("AP1")["origin"] == "baseline"
+        entry1 = tracks.get_by_apple_id("AP1")
+        assert entry1 is not None
+        assert entry1["origin"] == "baseline"
 
         # Simulate failure on AP2
         tracks.update("AP2", {"status": "failed", "fail_reason": "network_error"})
@@ -457,13 +474,19 @@ class TestSnapshotResetFailed:
         # Reset failed
         count = reset_failed(tracks)
         assert count == 1
-        assert tracks.get_by_apple_id("AP2")["status"] is None
-        assert tracks.get_by_apple_id("AP2")["origin"] == "baseline"  # origin preserved
+        entry2 = tracks.get_by_apple_id("AP2")
+        assert entry2 is not None
+        assert entry2["status"] is None
+        assert entry2["origin"] == "baseline"  # origin preserved
 
         # Verify persistence
         tracks2 = Tracks(path)
-        assert tracks2.get_by_apple_id("AP1")["status"] == "done"
-        assert tracks2.get_by_apple_id("AP2")["status"] is None
+        entry1 = tracks2.get_by_apple_id("AP1")
+        assert entry1 is not None
+        assert entry1["status"] == "done"
+        entry2 = tracks2.get_by_apple_id("AP2")
+        assert entry2 is not None
+        assert entry2["status"] is None
 
 
 # ══════════════════════════════════════════════════════════════════════════

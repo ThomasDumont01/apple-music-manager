@@ -29,9 +29,7 @@ def _page(items: list, has_next: bool = False) -> dict:
 
 
 def test_fetch_playlists_single_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        spotify, "spotify_get", lambda endpoint: _page([_playlist()])
-    )
+    monkeypatch.setattr(spotify, "spotify_get", lambda endpoint: _page([_playlist()]))
     out = spotify.fetch_user_playlists()
     assert out == [
         {
@@ -104,9 +102,7 @@ def test_fetch_playlists_handles_missing_image(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_count_liked_tracks_reads_total(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        spotify, "spotify_get", lambda endpoint: {"total": 1337, "items": []}
-    )
+    monkeypatch.setattr(spotify, "spotify_get", lambda endpoint: {"total": 1337, "items": []})
     assert spotify.count_liked_tracks() == 1337
 
 

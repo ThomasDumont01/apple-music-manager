@@ -28,9 +28,7 @@ from music_manager.core.io import load_json, save_json
 # ── Constants ────────────────────────────────────────────────────────────────
 
 OutcomeState = Literal["adopted_playlist", "kept_library", "rejected"]
-_VALID_STATES: frozenset[str] = frozenset(
-    {"adopted_playlist", "kept_library", "rejected"}
-)
+_VALID_STATES: frozenset[str] = frozenset({"adopted_playlist", "kept_library", "rejected"})
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -75,9 +73,7 @@ class RecommendationsStore:
                 self._dirty = True
 
         stats_raw = raw.get("stats")
-        self._stats: dict[str, object] = (
-            dict(stats_raw) if isinstance(stats_raw, dict) else {}
-        )
+        self._stats: dict[str, object] = dict(stats_raw) if isinstance(stats_raw, dict) else {}
 
     # ── Queries ──────────────────────────────────────────────────────────────
 
@@ -191,7 +187,8 @@ class RecommendationsStore:
             entry: dict = {
                 "state": state,
                 "outcome_at": _now_iso(),
-                "from_playlist": from_playlist or previous.get("from_playlist", "")
+                "from_playlist": from_playlist
+                or previous.get("from_playlist", "")
                 or previous.get("playlist", ""),
                 "to_playlists": list(to_playlists) if to_playlists else [],
                 "title": title or previous.get("title", ""),

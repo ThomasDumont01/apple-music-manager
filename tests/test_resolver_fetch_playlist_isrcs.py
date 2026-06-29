@@ -18,9 +18,15 @@ def _meta(name: str = "My Playlist", nb_tracks: int = 0) -> dict:
     }
 
 
-def _track(track_id: int, *, isrc: str | None = None, title: str = "T",
-           artist: str = "A", cover: str = "https://e/x.jpg",
-           preview: str = "https://e/p.mp3") -> dict:
+def _track(
+    track_id: int,
+    *,
+    isrc: str | None = None,
+    title: str = "T",
+    artist: str = "A",
+    cover: str = "https://e/x.jpg",
+    preview: str = "https://e/p.mp3",
+) -> dict:
     item: dict = {
         "id": track_id,
         "title": title,
@@ -50,7 +56,9 @@ def test_returns_empty_shape_on_unknown_playlist() -> None:
 def test_cover_url_falls_back_through_resolutions() -> None:
     """picture_xl is preferred; we fall back if only picture_big / medium are set."""
     meta = {
-        "id": 1, "title": "X", "nb_tracks": 0,
+        "id": 1,
+        "title": "X",
+        "nb_tracks": 0,
         "creator": {"name": "u"},
         "picture_xl": "https://e/xl.jpg",
         "picture_big": "https://e/big.jpg",
@@ -63,7 +71,9 @@ def test_cover_url_falls_back_through_resolutions() -> None:
     assert result["cover_url"] == "https://e/xl.jpg"
 
     meta_no_xl = {
-        "id": 2, "title": "Y", "nb_tracks": 0,
+        "id": 2,
+        "title": "Y",
+        "nb_tracks": 0,
         "creator": {"name": "u"},
         "picture_big": "https://e/big.jpg",
     }
@@ -80,10 +90,8 @@ def test_collects_tracks_when_isrc_present_inline() -> None:
     meta = _meta("Chill", nb_tracks=2)
     page = {
         "data": [
-            _track(1, isrc="frabc1234567", title="A", artist="X",
-                   cover="https://e/a.jpg"),
-            _track(2, isrc="USXYZ7654321", title="B", artist="Y",
-                   cover="https://e/b.jpg"),
+            _track(1, isrc="frabc1234567", title="A", artist="X", cover="https://e/a.jpg"),
+            _track(2, isrc="USXYZ7654321", title="B", artist="Y", cover="https://e/b.jpg"),
         ],
         "next": None,
     }
@@ -101,10 +109,20 @@ def test_collects_tracks_when_isrc_present_inline() -> None:
     assert result["creator"] == "thomas"
     assert result["nb_tracks"] == 2
     assert result["tracks"] == [
-        {"isrc": "FRABC1234567", "title": "A", "artist": "X",
-         "cover_url": "https://e/a.jpg", "preview_url": "https://e/p.mp3"},
-        {"isrc": "USXYZ7654321", "title": "B", "artist": "Y",
-         "cover_url": "https://e/b.jpg", "preview_url": "https://e/p.mp3"},
+        {
+            "isrc": "FRABC1234567",
+            "title": "A",
+            "artist": "X",
+            "cover_url": "https://e/a.jpg",
+            "preview_url": "https://e/p.mp3",
+        },
+        {
+            "isrc": "USXYZ7654321",
+            "title": "B",
+            "artist": "Y",
+            "cover_url": "https://e/b.jpg",
+            "preview_url": "https://e/p.mp3",
+        },
     ]
     assert result["skipped_no_isrc"] == 0
 
@@ -194,13 +212,11 @@ def test_paginates_through_next_pages() -> None:
     """Deezer caps each call at 100 tracks → we follow ?index=100 until empty."""
     meta = _meta(nb_tracks=150)
     page1 = {
-        "data": [_track(i, isrc=f"USAAA{i:07d}", title=f"T{i}")
-                 for i in range(100)],
+        "data": [_track(i, isrc=f"USAAA{i:07d}", title=f"T{i}") for i in range(100)],
         "next": "https://api.deezer.com/playlist/5/tracks?index=100&limit=100",
     }
     page2 = {
-        "data": [_track(i, isrc=f"USAAA{i:07d}", title=f"T{i}")
-                 for i in range(100, 150)],
+        "data": [_track(i, isrc=f"USAAA{i:07d}", title=f"T{i}") for i in range(100, 150)],
         "next": None,
     }
 
@@ -287,13 +303,19 @@ def test_preview_url_propagated_from_deezer_item() -> None:
     page = {
         "data": [
             {
-                "id": 1, "title": "With", "isrc": "USDDD0000001",
-                "artist": {"name": "A"}, "album": {"cover_medium": "https://e/c.jpg"},
+                "id": 1,
+                "title": "With",
+                "isrc": "USDDD0000001",
+                "artist": {"name": "A"},
+                "album": {"cover_medium": "https://e/c.jpg"},
                 "preview": "https://e-cdns-preview.deezer.com/snippet.mp3",
             },
             {
-                "id": 2, "title": "Without", "isrc": "USDDD0000002",
-                "artist": {"name": "B"}, "album": {"cover_medium": "https://e/d.jpg"},
+                "id": 2,
+                "title": "Without",
+                "isrc": "USDDD0000002",
+                "artist": {"name": "B"},
+                "album": {"cover_medium": "https://e/d.jpg"},
                 # no `preview` key
             },
         ],

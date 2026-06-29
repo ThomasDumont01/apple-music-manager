@@ -19,12 +19,20 @@ def _payload(
         "creator": creator,
         "nb_tracks": nb,
         "tracks": [
-            {"isrc": "FRABC1234567", "title": "Bad Guy",
-             "artist": "Billie Eilish", "cover_url": "https://e/a.jpg",
-             "preview_url": "https://e/p1.mp3"},
-            {"isrc": "USXYZ7654321", "title": "Other",
-             "artist": "Someone", "cover_url": "https://e/b.jpg",
-             "preview_url": "https://e/p2.mp3"},
+            {
+                "isrc": "FRABC1234567",
+                "title": "Bad Guy",
+                "artist": "Billie Eilish",
+                "cover_url": "https://e/a.jpg",
+                "preview_url": "https://e/p1.mp3",
+            },
+            {
+                "isrc": "USXYZ7654321",
+                "title": "Other",
+                "artist": "Someone",
+                "cover_url": "https://e/b.jpg",
+                "preview_url": "https://e/p2.mp3",
+            },
         ],
         "skipped_no_isrc": skipped,
     }
@@ -59,9 +67,7 @@ def test_outputs_stable_json_schema(
 
 def test_rejects_non_numeric_id(capsys: pytest.CaptureFixture) -> None:
     """`playlist-tracks abc` must not reach the resolver."""
-    with patch(
-        "music_manager.cli.playlist_tracks.fetch_playlist_preview"
-    ) as mock_fetch:
+    with patch("music_manager.cli.playlist_tracks.fetch_playlist_preview") as mock_fetch:
         exit_code = playlist_tracks.main(["abc"])
     mock_fetch.assert_not_called()
     assert exit_code != 0
@@ -139,8 +145,7 @@ def test_marks_track_as_in_library(
     data_root.mkdir()
     (data_root / ".data").mkdir()
     (data_root / ".data" / "tracks.json").write_text(
-        '{"AP_BAD_GUY": {"isrc": "FRABC1234567", "title": "Bad Guy", '
-        '"apple_id": "AP_BAD_GUY"}}'
+        '{"AP_BAD_GUY": {"isrc": "FRABC1234567", "title": "Bad Guy", "apple_id": "AP_BAD_GUY"}}'
     )
     monkeypatch.setattr(
         "music_manager.cli.playlist_tracks.load_config",

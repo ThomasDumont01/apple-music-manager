@@ -85,9 +85,7 @@ def main(args: list[str]) -> int:
 
     library_index = _load_library_index()
     candidate_ids = [
-        library_index[track["isrc"]]
-        for track in enriched
-        if library_index.get(track["isrc"])
+        library_index[track["isrc"]] for track in enriched if library_index.get(track["isrc"])
     ]
     alive = apple_ids_exist(candidate_ids) if candidate_ids else set()
     for track in enriched:
@@ -131,12 +129,7 @@ def _enrich_via_deezer(pending: list[dict]) -> tuple[list[dict], int]:
         if not data or "error" in data:
             return None
         album = data.get("album") or {}
-        cover = (
-            album.get("cover_medium")
-            or album.get("cover")
-            or album.get("cover_big")
-            or ""
-        )
+        cover = album.get("cover_medium") or album.get("cover") or album.get("cover_big") or ""
         artist_obj = data.get("artist") or {}
         # Prefer the CSV's title/artist (matches what the user sees in
         # Exportify), but fall back to Deezer's value when the CSV column was

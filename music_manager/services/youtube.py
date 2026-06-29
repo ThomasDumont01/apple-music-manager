@@ -59,6 +59,7 @@ class _SearchOutcome:
     error: str = ""
     returncode: int = 0
 
+
 # ── Rate limit state (module-level, thread-safe) ────────────────────────────
 
 _lock = threading.Lock()
@@ -190,25 +191,27 @@ def download_track(url: str, output_dir: str) -> tuple[str, int | None]:
     cmd = ["yt-dlp"]
     if _use_cookies:
         cmd.extend(["--cookies-from-browser", "safari"])
-    cmd.extend([
-        "--format",
-        "bestaudio",
-        "--extract-audio",
-        "--audio-format",
-        "m4a",
-        "--audio-quality",
-        "0",
-        "--output",
-        output_template,
-        "--no-playlist",
-        "--quiet",
-        "--print",
-        "after_move:filepath",
-        "--print",
-        "after_move:duration",
-        "--",
-        url,
-    ])
+    cmd.extend(
+        [
+            "--format",
+            "bestaudio",
+            "--extract-audio",
+            "--audio-format",
+            "m4a",
+            "--audio-quality",
+            "0",
+            "--output",
+            output_template,
+            "--no-playlist",
+            "--quiet",
+            "--print",
+            "after_move:filepath",
+            "--print",
+            "after_move:duration",
+            "--",
+            url,
+        ]
+    )
 
     try:
         result = subprocess.run(
@@ -261,13 +264,15 @@ def _do_search(isrc: str) -> _SearchOutcome:
     cmd = ["yt-dlp"]
     if _use_cookies:
         cmd.extend(["--cookies-from-browser", "safari"])
-    cmd.extend([
-        "--dump-json",
-        "--skip-download",
-        "--no-playlist",
-        "--quiet",
-        f"ytsearch1:{isrc}",
-    ])
+    cmd.extend(
+        [
+            "--dump-json",
+            "--skip-download",
+            "--no-playlist",
+            "--quiet",
+            f"ytsearch1:{isrc}",
+        ]
+    )
     try:
         result = subprocess.run(
             cmd,
@@ -289,9 +294,7 @@ def _do_search(isrc: str) -> _SearchOutcome:
         if tcc_blocked and _use_cookies:
             _auto_disable_cookies()
         cookies_needed = not tcc_blocked and _detect_cookies_needed(stderr)
-        rate_limited = (
-            not tcc_blocked and not cookies_needed and _detect_rate_limit(stderr)
-        )
+        rate_limited = not tcc_blocked and not cookies_needed and _detect_rate_limit(stderr)
         duration_ms = int((time.monotonic() - t0) * 1000)
         log_event(
             "youtube_search",
@@ -419,8 +422,7 @@ def _handle_cookies_needed(isrc: str) -> list[dict]:
 
     # Already declined this session → skip immediately
     if _cookies_decided and not _use_cookies:
-        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0,
-                  reason="cookies_declined")
+        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0, reason="cookies_declined")
         return []
 
     # Cookies were active but still blocked → expired, reset config
@@ -434,8 +436,7 @@ def _handle_cookies_needed(isrc: str) -> list[dict]:
     # Ask user via UI callback
     cb = _cookies_callback
     if not cb:
-        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0,
-                  reason="age_restricted")
+        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0, reason="age_restricted")
         return []
 
     activated = cb()  # blocks until UI responds
@@ -443,8 +444,7 @@ def _handle_cookies_needed(isrc: str) -> list[dict]:
     _use_cookies = activated
 
     if not activated:
-        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0,
-                  reason="cookies_declined")
+        log_event("youtube_search", isrc=isrc, results=0, duration_ms=0, reason="cookies_declined")
         return []
 
     # Persist for future sessions
@@ -461,8 +461,7 @@ def _handle_cookies_needed(isrc: str) -> list[dict]:
     # Cookies didn't help → disable so we don't re-prompt every track
     _use_cookies = False
 
-    log_event("youtube_search", isrc=isrc, results=0, duration_ms=0,
-              reason="cookies_failed")
+    log_event("youtube_search", isrc=isrc, results=0, duration_ms=0, reason="cookies_failed")
     return []
 
 

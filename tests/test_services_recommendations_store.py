@@ -29,9 +29,7 @@ def test_empty_store_has_no_active_or_blacklist(store_path: str) -> None:
 def test_is_active_and_blacklisted_case_insensitive(store_path: str) -> None:
     """Lookups normalize to uppercase — matches CLAUDE.md ISRC convention."""
     store = RecommendationsStore(store_path)
-    store.add_active(
-        {"isrc": "frabc1234567", "apple_id": "A1", "title": "T", "artist": "A"}
-    )
+    store.add_active({"isrc": "frabc1234567", "apple_id": "A1", "title": "T", "artist": "A"})
     assert store.is_active("frabc1234567")
     assert store.is_active("FRABC1234567")
     assert not store.is_blacklisted("frabc1234567")
@@ -50,9 +48,7 @@ def test_empty_isrc_returns_false(store_path: str) -> None:
 def test_add_active_persists_required_fields(store_path: str) -> None:
     """add_active stores the recommendation and stamps added_at."""
     store = RecommendationsStore(store_path)
-    store.add_active(
-        {"isrc": "X1", "apple_id": "AP1", "title": "Song", "artist": "Artist"}
-    )
+    store.add_active({"isrc": "X1", "apple_id": "AP1", "title": "Song", "artist": "Artist"})
     entry = store.all_active()["X1"]
     assert entry["apple_id"] == "AP1"
     assert entry["title"] == "Song"
@@ -62,12 +58,8 @@ def test_add_active_persists_required_fields(store_path: str) -> None:
 def test_add_active_duplicate_isrc_is_noop(store_path: str) -> None:
     """A second add_active for the same ISRC keeps the first record."""
     store = RecommendationsStore(store_path)
-    store.add_active(
-        {"isrc": "X1", "apple_id": "AP1", "title": "First", "artist": "A"}
-    )
-    store.add_active(
-        {"isrc": "X1", "apple_id": "AP_OTHER", "title": "Second", "artist": "B"}
-    )
+    store.add_active({"isrc": "X1", "apple_id": "AP1", "title": "First", "artist": "A"})
+    store.add_active({"isrc": "X1", "apple_id": "AP_OTHER", "title": "Second", "artist": "B"})
     entry = store.all_active()["X1"]
     assert entry["title"] == "First"
     assert entry["apple_id"] == "AP1"
@@ -83,9 +75,7 @@ def test_add_active_skips_when_isrc_missing(store_path: str) -> None:
 
 def test_add_active_returns_added_true_on_success(store_path: str) -> None:
     store = RecommendationsStore(store_path)
-    result = store.add_active(
-        {"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"}
-    )
+    result = store.add_active({"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"})
     assert result == {"added": True}
 
 
@@ -125,9 +115,7 @@ def test_add_active_duplicate_returns_current_playlist(store_path: str) -> None:
 def test_blacklist_removes_from_active(store_path: str) -> None:
     """Blacklisting an active ISRC moves it across — it is no longer active."""
     store = RecommendationsStore(store_path)
-    store.add_active(
-        {"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"}
-    )
+    store.add_active({"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"})
     store.blacklist("X1")
     assert not store.is_active("X1")
     assert store.is_blacklisted("X1")
@@ -177,9 +165,7 @@ def test_move_to_blacklist_does_not_re_insert_known_blacklist(store_path: str) -
 def test_save_then_reload_roundtrip(store_path: str) -> None:
     """A saved store reloads identical."""
     store = RecommendationsStore(store_path)
-    store.add_active(
-        {"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A", "score": 0.9}
-    )
+    store.add_active({"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A", "score": 0.9})
     store.blacklist("X2", title="Removed", artist="ByUser")
     store.record_generation()
     store.save()
@@ -195,9 +181,7 @@ def test_save_then_reload_roundtrip(store_path: str) -> None:
 def test_save_is_atomic(store_path: str) -> None:
     """Saved file is valid JSON with the documented top-level keys."""
     store = RecommendationsStore(store_path)
-    store.add_active(
-        {"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"}
-    )
+    store.add_active({"isrc": "X1", "apple_id": "AP1", "title": "T", "artist": "A"})
     store.save()
 
     raw = json.loads(Path(store_path).read_text())
@@ -238,16 +222,22 @@ def test_seed_quality_computes_blacklist_ratio(store_path: str) -> None:
     # SEED_BAD: 1 active, 3 blacklisted → ratio 0.75
     store.add_active(
         {
-            "isrc": "B1", "apple_id": "A1", "title": "T",
-            "artist": "a", "seed_isrc": "SEED_BAD",
+            "isrc": "B1",
+            "apple_id": "A1",
+            "title": "T",
+            "artist": "a",
+            "seed_isrc": "SEED_BAD",
         }
     )
     for i in range(3):
         isrc = f"B{i + 2}"
         store.add_active(
             {
-                "isrc": isrc, "apple_id": f"A{i + 2}", "title": "T",
-                "artist": "a", "seed_isrc": "SEED_BAD",
+                "isrc": isrc,
+                "apple_id": f"A{i + 2}",
+                "title": "T",
+                "artist": "a",
+                "seed_isrc": "SEED_BAD",
             }
         )
         store.blacklist(isrc)
@@ -474,7 +464,10 @@ def test_legacy_active_migration_persists_on_resave(tmp_path: Path) -> None:
             {
                 "active": {
                     "OLD1": {
-                        "isrc": "OLD1", "apple_id": "AP1", "title": "T", "artist": "A",
+                        "isrc": "OLD1",
+                        "apple_id": "AP1",
+                        "title": "T",
+                        "artist": "A",
                     }
                 }
             }

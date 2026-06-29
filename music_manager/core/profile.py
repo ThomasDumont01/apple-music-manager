@@ -113,8 +113,7 @@ def build_profile(
     scored.sort(key=lambda item: item[0], reverse=True)
 
     top_tracks = [
-        (isrc, title, artist)
-        for _score, isrc, title, artist, _g in scored[:TOP_TRACKS_LIMIT]
+        (isrc, title, artist) for _score, isrc, title, artist, _g in scored[:TOP_TRACKS_LIMIT]
     ]
     top_artists = artist_scores.most_common(TOP_ARTISTS_LIMIT)
     top_genres = genre_counts.most_common(TOP_GENRES_LIMIT)

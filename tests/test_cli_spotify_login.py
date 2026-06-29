@@ -25,9 +25,7 @@ def test_detach_spawns_and_returns_immediately(
 ) -> None:
     monkeypatch.setattr(spotify_login, "get_client_id", lambda: "CLIENT_ID")
     spawned: list[bool] = []
-    monkeypatch.setattr(
-        spotify_login, "_spawn_detached", lambda: spawned.append(True)
-    )
+    monkeypatch.setattr(spotify_login, "_spawn_detached", lambda: spawned.append(True))
     exit_code = spotify_login.main(["--detach"])
     assert exit_code == 0
     assert spawned == [True]
@@ -60,9 +58,7 @@ def test_full_oauth_flow_success(
 
     def fake_browser_open(url: str) -> None:
         state = parse_qs(urlparse(url).query)["state"][0]
-        _post_callback_after_delay(
-            f"http://127.0.0.1:8765/callback?code=AUTH_CODE&state={state}"
-        )
+        _post_callback_after_delay(f"http://127.0.0.1:8765/callback?code=AUTH_CODE&state={state}")
 
     monkeypatch.setattr(spotify_login.webbrowser, "open", fake_browser_open)
     monkeypatch.setattr(
@@ -91,14 +87,10 @@ def test_state_mismatch_returns_error(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(spotify_login, "get_client_id", lambda: "CLIENT_ID")
-    monkeypatch.setattr(
-        spotify_login, "pkce_verifier_challenge", lambda: ("V", "C")
-    )
+    monkeypatch.setattr(spotify_login, "pkce_verifier_challenge", lambda: ("V", "C"))
 
     def fake_open(url: str) -> None:
-        _post_callback_after_delay(
-            "http://127.0.0.1:8765/callback?code=X&state=WRONG_STATE"
-        )
+        _post_callback_after_delay("http://127.0.0.1:8765/callback?code=X&state=WRONG_STATE")
 
     monkeypatch.setattr(spotify_login.webbrowser, "open", fake_open)
     exit_code = spotify_login.main(["--timeout", "5"])
@@ -111,9 +103,7 @@ def test_timeout_returns_error(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(spotify_login, "get_client_id", lambda: "CLIENT_ID")
-    monkeypatch.setattr(
-        spotify_login, "pkce_verifier_challenge", lambda: ("V", "C")
-    )
+    monkeypatch.setattr(spotify_login, "pkce_verifier_challenge", lambda: ("V", "C"))
     monkeypatch.setattr(spotify_login.webbrowser, "open", lambda url: None)
     exit_code = spotify_login.main(["--timeout", "1"])
     assert exit_code == 1
@@ -125,14 +115,10 @@ def test_spotify_error_in_callback(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(spotify_login, "get_client_id", lambda: "CLIENT_ID")
-    monkeypatch.setattr(
-        spotify_login, "pkce_verifier_challenge", lambda: ("V", "C")
-    )
+    monkeypatch.setattr(spotify_login, "pkce_verifier_challenge", lambda: ("V", "C"))
 
     def fake_open(url: str) -> None:
-        _post_callback_after_delay(
-            "http://127.0.0.1:8765/callback?error=access_denied"
-        )
+        _post_callback_after_delay("http://127.0.0.1:8765/callback?error=access_denied")
 
     monkeypatch.setattr(spotify_login.webbrowser, "open", fake_open)
     exit_code = spotify_login.main(["--timeout", "5"])
@@ -145,15 +131,11 @@ def test_exchange_failure_returns_error(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(spotify_login, "get_client_id", lambda: "CLIENT_ID")
-    monkeypatch.setattr(
-        spotify_login, "pkce_verifier_challenge", lambda: ("V", "C")
-    )
+    monkeypatch.setattr(spotify_login, "pkce_verifier_challenge", lambda: ("V", "C"))
 
     def fake_open(url: str) -> None:
         state = parse_qs(urlparse(url).query)["state"][0]
-        _post_callback_after_delay(
-            f"http://127.0.0.1:8765/callback?code=X&state={state}"
-        )
+        _post_callback_after_delay(f"http://127.0.0.1:8765/callback?code=X&state={state}")
 
     monkeypatch.setattr(spotify_login.webbrowser, "open", fake_open)
 
@@ -172,15 +154,11 @@ def test_incomplete_token_response(
 ) -> None:
     """Spotify can hypothetically return without one of the tokens."""
     monkeypatch.setattr(spotify_login, "get_client_id", lambda: "CLIENT_ID")
-    monkeypatch.setattr(
-        spotify_login, "pkce_verifier_challenge", lambda: ("V", "C")
-    )
+    monkeypatch.setattr(spotify_login, "pkce_verifier_challenge", lambda: ("V", "C"))
 
     def fake_open(url: str) -> None:
         state = parse_qs(urlparse(url).query)["state"][0]
-        _post_callback_after_delay(
-            f"http://127.0.0.1:8765/callback?code=X&state={state}"
-        )
+        _post_callback_after_delay(f"http://127.0.0.1:8765/callback?code=X&state={state}")
 
     monkeypatch.setattr(spotify_login.webbrowser, "open", fake_open)
     monkeypatch.setattr(

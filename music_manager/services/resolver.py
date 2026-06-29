@@ -129,7 +129,10 @@ def _resolve_by_isrc(
     data = deezer_get(f"/track/isrc:{isrc}")
     if not data or "error" in data:
         _log_resolve_detail(
-            "isrc_not_on_deezer", isrc=isrc, title=title, artist=artist,
+            "isrc_not_on_deezer",
+            isrc=isrc,
+            title=title,
+            artist=artist,
         )
         return None  # ISRC not on Deezer → caller falls back to search
 
@@ -145,8 +148,12 @@ def _resolve_by_isrc(
     if not isrc_is_correct:
         # ISRC points to a completely different song → ignore, fallback to search
         _log_resolve_detail(
-            "isrc_wrong_song", isrc=isrc, title=title, artist=artist,
-            dz_title=dz_title, dz_artist=dz_artist,
+            "isrc_wrong_song",
+            isrc=isrc,
+            title=title,
+            artist=artist,
+            dz_title=dz_title,
+            dz_artist=dz_artist,
         )
         return None
 
@@ -887,9 +894,7 @@ def fetch_playlist_preview(playlist_id: int, max_tracks: int = 500) -> dict:
     page_size = 100
 
     while collected < max_tracks:
-        page = deezer_get(
-            f"/playlist/{playlist_id}/tracks?index={index}&limit={page_size}"
-        )
+        page = deezer_get(f"/playlist/{playlist_id}/tracks?index={index}&limit={page_size}")
         if not page:
             break
         items = page.get("data") or []
@@ -1223,8 +1228,11 @@ def deezer_get(endpoint: str) -> dict | None:
 
 
 def _log_deezer(
-    endpoint: str, duration_ms: int, status: int,
-    error: bool = False, exc_type: str = "",
+    endpoint: str,
+    duration_ms: int,
+    status: int,
+    error: bool = False,
+    exc_type: str = "",
 ) -> None:
     """Log a Deezer API request (sampled: only errors + slow requests)."""
     from music_manager.core.logger import log_event  # noqa: PLC0415
@@ -1253,8 +1261,12 @@ def _log_circuit_breaker(consecutive_failures: int) -> None:
 
 
 def _log_resolve_result(
-    title: str, artist: str, album: str, isrc: str,
-    result: ResolveResult, method: str,
+    title: str,
+    artist: str,
+    album: str,
+    isrc: str,
+    result: ResolveResult,
+    method: str,
 ) -> None:
     """Log every resolve() outcome — the master diagnostic event."""
     from music_manager.core.logger import log_event  # noqa: PLC0415
@@ -1284,7 +1296,10 @@ def _log_resolve_detail(reason: str, **data: object) -> None:
 
 
 def _log_search_empty(
-    title: str, artist: str, album: str, raw_deezer_results: int,
+    title: str,
+    artist: str,
+    album: str,
+    raw_deezer_results: int,
 ) -> None:
     """Log when title+artist search matched nothing.
 
@@ -1304,8 +1319,12 @@ def _log_search_empty(
 
 
 def _log_mismatch(
-    title: str, artist: str, local_album: str, deezer_album: str,
-    isrc: str, reason: str,
+    title: str,
+    artist: str,
+    local_album: str,
+    deezer_album: str,
+    isrc: str,
+    reason: str,
 ) -> None:
     """Log album mismatch — local album vs Deezer album for diagnostics."""
     from music_manager.core.logger import log_event  # noqa: PLC0415

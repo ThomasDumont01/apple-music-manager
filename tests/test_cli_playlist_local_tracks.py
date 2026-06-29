@@ -19,7 +19,8 @@ def test_lists_playlist_tracks(
         '"artist": "Else", "cover_url": "https://c2.jpg"}}'
     )
     monkeypatch.setattr(
-        playlist_local_tracks, "load_config",
+        playlist_local_tracks,
+        "load_config",
         lambda: {"data_root": str(data_root)},
     )
     monkeypatch.setattr(
@@ -46,7 +47,8 @@ def test_handles_tracks_without_tracks_json(
 ) -> None:
     data_root = tmp_path / "music"
     monkeypatch.setattr(
-        playlist_local_tracks, "load_config",
+        playlist_local_tracks,
+        "load_config",
         lambda: {"data_root": str(data_root)},
     )
     monkeypatch.setattr(
@@ -65,12 +67,8 @@ def test_handles_tracks_without_tracks_json(
     assert out["tracks"][0]["in_library"] is True
 
 
-def test_not_found(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        playlist_local_tracks, "load_config", lambda: {"data_root": ""}
-    )
+def test_not_found(capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(playlist_local_tracks, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(playlist_local_tracks, "_load_playlist_items", lambda name: None)
     exit_code = playlist_local_tracks.main(["nope"])
     assert exit_code == 1
@@ -78,12 +76,8 @@ def test_not_found(
     assert out["error"] == "not_found"
 
 
-def test_empty_playlist(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        playlist_local_tracks, "load_config", lambda: {"data_root": ""}
-    )
+def test_empty_playlist(capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(playlist_local_tracks, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(playlist_local_tracks, "_load_playlist_items", lambda name: [])
     exit_code = playlist_local_tracks.main(["empty"])
     assert exit_code == 0
@@ -98,19 +92,16 @@ def test_apple_id_uppercased(
     """Apple persistent IDs are 16-char uppercase hex; tracks.json keys match."""
     data_root = tmp_path / "music"
     (data_root / ".data").mkdir(parents=True)
-    (data_root / ".data" / "tracks.json").write_text(
-        '{"ABCDEF0123456789": {"isrc": "USX1"}}'
-    )
+    (data_root / ".data" / "tracks.json").write_text('{"ABCDEF0123456789": {"isrc": "USX1"}}')
     monkeypatch.setattr(
-        playlist_local_tracks, "load_config",
+        playlist_local_tracks,
+        "load_config",
         lambda: {"data_root": str(data_root)},
     )
     monkeypatch.setattr(
         playlist_local_tracks,
         "_load_playlist_items",
-        lambda name: [
-            {"apple_id": "ABCDEF0123456789", "title": "T", "artist": "A"}
-        ],
+        lambda name: [{"apple_id": "ABCDEF0123456789", "title": "T", "artist": "A"}],
     )
     playlist_local_tracks.main(["x"])
     out = json.loads(capsys.readouterr().out)
@@ -122,11 +113,10 @@ def test_isrc_normalised_uppercase(
 ) -> None:
     data_root = tmp_path / "music"
     (data_root / ".data").mkdir(parents=True)
-    (data_root / ".data" / "tracks.json").write_text(
-        '{"AP_X": {"isrc": "usx_lower"}}'
-    )
+    (data_root / ".data" / "tracks.json").write_text('{"AP_X": {"isrc": "usx_lower"}}')
     monkeypatch.setattr(
-        playlist_local_tracks, "load_config",
+        playlist_local_tracks,
+        "load_config",
         lambda: {"data_root": str(data_root)},
     )
     monkeypatch.setattr(

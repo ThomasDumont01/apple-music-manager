@@ -159,10 +159,7 @@ def complete_album(
         remove_failed(isrc, title, artist, tracks_store)
 
     # Build Track objects for the pipeline
-    tracks_for_pipeline = [
-        (build_track(dz, album_data or {}), "", "", "")
-        for dz in missing
-    ]
+    tracks_for_pipeline = [(build_track(dz, album_data or {}), "", "", "") for dz in missing]
 
     # Run parallel import pipeline
     batch = run_import_pipeline(
@@ -193,7 +190,7 @@ def _strip_article(title: str) -> str:
     lower = title.lower()
     for art in _ARTICLE_PREFIXES:
         if lower.startswith(art):
-            return title[len(art):]
+            return title[len(art) :]
     if lower.startswith("l\u2019") or lower.startswith("l'"):
         return title[2:]
     return title

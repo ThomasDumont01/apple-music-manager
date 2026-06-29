@@ -18,9 +18,7 @@ def test_search_playlists_returns_data_array() -> None:
             }
         ]
     }
-    with patch(
-        "music_manager.services.resolver.deezer_get", return_value=payload
-    ) as mock_get:
+    with patch("music_manager.services.resolver.deezer_get", return_value=payload) as mock_get:
         result = search_deezer_playlists("lofi", limit=5)
     assert isinstance(result, list)
     assert len(result) == 1

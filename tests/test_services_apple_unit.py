@@ -311,10 +311,7 @@ def test_list_playlists_exclude_folder_filters_children(mock_run) -> None:
     """Playlists whose parent matches ``exclude_folder`` are dropped."""
 
     mock_run.return_value = (
-        "Workout|||8|||\n"
-        "library|||20|||for me\n"
-        "rock|||12|||for me\n"
-        "Favorites|||5|||\n"
+        "Workout|||8|||\nlibrary|||20|||for me\nrock|||12|||for me\nFavorites|||5|||\n"
     )
     result = list_playlists(exclude_folder="for me")
     names = [name for name, _count in result]
@@ -348,13 +345,7 @@ def test_list_playlists_with_tracks_parses(mock_run) -> None:
     """Parses bulk playlist scan with per-playlist track IDs."""
 
     mock_run.return_value = (
-        "PLAYLIST:Rock Mix|||\n"
-        "AAA\n"
-        "BBB\n"
-        "PLAYLIST:Workout|||Folder\n"
-        "CCC\n"
-        "AAA\n"
-        "CCC\n"
+        "PLAYLIST:Rock Mix|||\nAAA\nBBB\nPLAYLIST:Workout|||Folder\nCCC\nAAA\nCCC\n"
     )
     result = list_playlists_with_tracks()
 
@@ -386,12 +377,7 @@ def test_list_playlists_with_tracks_empty_playlist(mock_run) -> None:
 @patch(_PATCH)
 def test_get_playlist_membership_detailed_returns_parent(mock_run) -> None:
     """The detailed variant exposes the parent folder for each playlist."""
-    mock_run.return_value = (
-        "PLAYLIST:My Favs|||\n"
-        "T1\n"
-        "PLAYLIST:library|||for me\n"
-        "T1\n"
-    )
+    mock_run.return_value = "PLAYLIST:My Favs|||\nT1\nPLAYLIST:library|||for me\nT1\n"
     result = get_playlist_membership_detailed("T1")
     assert ("My Favs", "", ["T1"]) in result
     assert ("library", "for me", ["T1"]) in result
@@ -404,14 +390,7 @@ def test_get_playlist_membership_detailed_empty(mock_run) -> None:
 
 @patch(_PATCH)
 def test_get_playlist_membership_parses_parent(mock_run) -> None:
-    mock_run.return_value = (
-        "PLAYLIST:My Favs|||\n"
-        "T1\n"
-        "T2\n"
-        "PLAYLIST:library|||for me\n"
-        "T1\n"
-        "T3\n"
-    )
+    mock_run.return_value = "PLAYLIST:My Favs|||\nT1\nT2\nPLAYLIST:library|||for me\nT1\nT3\n"
     result = get_playlist_membership("T1")
     assert ("My Favs", ["T1", "T2"]) in result
     assert ("library", ["T1", "T3"]) in result
@@ -420,12 +399,7 @@ def test_get_playlist_membership_parses_parent(mock_run) -> None:
 @patch(_PATCH)
 def test_get_playlist_membership_exclude_folder(mock_run) -> None:
     mock_run.return_value = (
-        "PLAYLIST:My Favs|||\n"
-        "T1\n"
-        "PLAYLIST:library|||for me\n"
-        "T1\n"
-        "PLAYLIST:rock|||for me\n"
-        "T1\n"
+        "PLAYLIST:My Favs|||\nT1\nPLAYLIST:library|||for me\nT1\nPLAYLIST:rock|||for me\nT1\n"
     )
     result = get_playlist_membership("T1", exclude_folder="for me")
     names = [name for name, _ in result]

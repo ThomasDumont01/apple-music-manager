@@ -78,9 +78,7 @@ def test_extract_playlist_seeds_deduplicates_by_isrc(tracks, apple_stub) -> None
 
 def test_extract_playlist_seeds_respects_limit(tracks, apple_stub) -> None:
     apple_stub.get_playlist_tracks.return_value = ["AP1", "AP2"]
-    seeds = extract_playlist_seeds(
-        "Workout", tracks, apple_service=apple_stub, limit=1
-    )
+    seeds = extract_playlist_seeds("Workout", tracks, apple_service=apple_stub, limit=1)
     assert len(seeds) == 1
     assert seeds[0][0] == "ISRC1"
 
@@ -90,9 +88,7 @@ def test_extract_playlist_seeds_empty_playlist_name(tracks, apple_stub) -> None:
     apple_stub.get_playlist_tracks.assert_not_called()
 
 
-def test_extract_playlist_seeds_applescript_failure_returns_empty(
-    tracks, apple_stub
-) -> None:
+def test_extract_playlist_seeds_applescript_failure_returns_empty(tracks, apple_stub) -> None:
     apple_stub.get_playlist_tracks.side_effect = RuntimeError("boom")
     assert extract_playlist_seeds("Workout", tracks, apple_service=apple_stub) == []
 
@@ -120,9 +116,7 @@ def test_validate_playlist_exists_false(apple_stub) -> None:
 
 def test_validate_playlist_exists_passes_exclude_folder(apple_stub) -> None:
     apple_stub.list_playlists.return_value = []
-    validate_playlist_exists(
-        "Workout", apple_service=apple_stub, folder_name="for me"
-    )
+    validate_playlist_exists("Workout", apple_service=apple_stub, folder_name="for me")
     apple_stub.list_playlists.assert_called_once_with(exclude_folder="for me")
 
 

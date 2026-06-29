@@ -78,9 +78,7 @@ class ExportMixin(_MixinBase):
         num = len(self._export_playlists)
         if self._export_cursor < num:
             # Toggle checkbox (same as Space)
-            self._export_checks[self._export_cursor] = not self._export_checks[
-                self._export_cursor
-            ]
+            self._export_checks[self._export_cursor] = not self._export_checks[self._export_cursor]
             self._refresh_export_body()
             return
         action_idx = self._export_cursor - num

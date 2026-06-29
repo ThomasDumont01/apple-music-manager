@@ -282,9 +282,7 @@ def apply_corrections(
             if apple_fields:
                 apple_batch[apple_id] = apple_fields
                 # Convert int fields before storing (fields has str values from Divergence)
-                store_fields = {
-                    k: int(v) if k in _INT_FIELDS else v for k, v in fields.items()
-                }
+                store_fields = {k: int(v) if k in _INT_FIELDS else v for k, v in fields.items()}
                 tracks_store.update(apple_id, store_fields)
                 if apple_store:
                     lib = apple_store.get_all()

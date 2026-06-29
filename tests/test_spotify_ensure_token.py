@@ -57,9 +57,7 @@ def test_rotates_refresh_token_when_api_returns_one(
         lambda: {"access_token": "", "refresh_token": "RT_OLD", "expiry": 0.0},
     )
     saved: dict[str, object] = {}
-    monkeypatch.setattr(
-        spotify, "save_tokens", lambda a, r, e: saved.update(refresh=r)
-    )
+    monkeypatch.setattr(spotify, "save_tokens", lambda a, r, e: saved.update(refresh=r))
     monkeypatch.setattr(
         spotify,
         "refresh_access_token",
@@ -107,9 +105,7 @@ def test_force_refresh_skips_expiry_check(monkeypatch: pytest.MonkeyPatch) -> No
         },
     )
     saved: dict[str, object] = {}
-    monkeypatch.setattr(
-        spotify, "save_tokens", lambda a, r, e: saved.update(access=a)
-    )
+    monkeypatch.setattr(spotify, "save_tokens", lambda a, r, e: saved.update(access=a))
     monkeypatch.setattr(
         spotify,
         "refresh_access_token",

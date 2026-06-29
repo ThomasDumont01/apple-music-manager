@@ -237,7 +237,9 @@ def _match_known_albums(
         if not album_id:
             log_event(
                 "identify_phase2_miss",
-                title=title, artist=artist, album=album,
+                title=title,
+                artist=artist,
+                album=album,
                 reason="unknown_album",
             )
             remaining.append((apple_id, entry))
@@ -257,8 +259,11 @@ def _match_known_albums(
         if not tracklist:
             log_event(
                 "identify_phase2_miss",
-                title=title, artist=artist, album=album,
-                reason="empty_tracklist", album_id=album_id,
+                title=title,
+                artist=artist,
+                album=album,
+                reason="empty_tracklist",
+                album_id=album_id,
             )
             remaining.append((apple_id, entry))
             continue
@@ -269,9 +274,13 @@ def _match_known_albums(
             dz_titles = [t.get("title", "") for t in tracklist[:5]]
             log_event(
                 "identify_phase2_miss",
-                title=title, artist=artist, album=album,
-                reason="title_not_in_tracklist", album_id=album_id,
-                tracklist_size=len(tracklist), sample_titles=dz_titles,
+                title=title,
+                artist=artist,
+                album=album,
+                reason="title_not_in_tracklist",
+                album_id=album_id,
+                tracklist_size=len(tracklist),
+                sample_titles=dz_titles,
             )
             remaining.append((apple_id, entry))
             continue
@@ -284,8 +293,11 @@ def _match_known_albums(
         else:
             log_event(
                 "identify_phase2_miss",
-                title=title, artist=artist, album=album,
-                reason="resolve_by_id_failed", dz_id=dz_id,
+                title=title,
+                artist=artist,
+                album=album,
+                reason="resolve_by_id_failed",
+                dz_id=dz_id,
             )
             remaining.append((apple_id, entry))
 

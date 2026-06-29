@@ -103,9 +103,7 @@ def main() -> None:
     apple = Apple()
     tracks = Tracks(paths.tracks_path) if config["setup_done"] else None
     albums = Albums(paths.albums_path) if config["setup_done"] else None
-    recs = (
-        RecommendationsStore(paths.recommendations_path) if config["setup_done"] else None
-    )
+    recs = RecommendationsStore(paths.recommendations_path) if config["setup_done"] else None
 
     # ── Single-instance guard ────────────────────────────
     # Two UIs writing to recommendations.json / tracks.json in parallel
@@ -172,7 +170,9 @@ def _try_upload_logs(config: dict, paths: object) -> None:
 
 
 def _log_session_start(
-    log_fn: object, config: dict, paths: object,
+    log_fn: object,
+    config: dict,
+    paths: object,
 ) -> None:
     """Log session_start with app version + store sizes."""
     from collections.abc import Callable  # noqa: PLC0415

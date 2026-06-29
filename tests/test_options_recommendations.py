@@ -15,8 +15,14 @@ from music_manager.ui.screens._recommendations import RecommendationsMixin
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 
-class _StubScreen(RecommendationsMixin):
+class _StubScreen(RecommendationsMixin):  # type: ignore[misc]
     """Minimal stand-in that mocks Textual widget access for unit-tested flows."""
+
+    def __getattr__(self, name: str):
+        # Satisfies ABC / Protocol without implementing 158 abstract methods.
+        # Only called for attributes not found via normal lookup, so explicit
+        # overrides below take precedence.
+        return MagicMock()
 
     def __init__(
         self,
@@ -76,7 +82,7 @@ def stub(paths: Paths) -> _StubScreen:
     tracks = Tracks(paths.tracks_path)
     albums = Albums(paths.albums_path)
     recs = RecommendationsStore(paths.recommendations_path)
-    return _StubScreen(tracks=tracks, albums=albums, recs=recs, paths=paths)
+    return _StubScreen(tracks=tracks, albums=albums, recs=recs, paths=paths)  # type: ignore[abstract]
 
 
 # ── Tests ───────────────────────────────────────────────────────────────────
@@ -111,15 +117,9 @@ def test_start_recommendations_shows_mode_selector_with_key(stub, monkeypatch) -
 
 def test_show_genre_selector_lists_top_genres(stub) -> None:
     """The genre selector lists the dominant genres of the live library."""
-    stub._tracks_store.add(
-        "A1", {"isrc": "X1", "title": "T1", "artist": "A", "genre": "Rock"}
-    )
-    stub._tracks_store.add(
-        "A2", {"isrc": "X2", "title": "T2", "artist": "B", "genre": "Rock"}
-    )
-    stub._tracks_store.add(
-        "A3", {"isrc": "X3", "title": "T3", "artist": "C", "genre": "Pop"}
-    )
+    stub._tracks_store.add("A1", {"isrc": "X1", "title": "T1", "artist": "A", "genre": "Rock"})
+    stub._tracks_store.add("A2", {"isrc": "X2", "title": "T2", "artist": "B", "genre": "Rock"})
+    stub._tracks_store.add("A3", {"isrc": "X3", "title": "T3", "artist": "C", "genre": "Pop"})
     stub._show_genre_selector()
     assert stub._view == "recommend_select_genre"
     genre_keys = [
@@ -193,8 +193,6 @@ def test_on_recommend_done_no_key_routes_to_error(stub) -> None:
 
 def test_start_recommend_worker_launches_thread(stub, monkeypatch) -> None:
     """The worker entry point sets the running flag and renders scanning view."""
-    # _run_recommend is @work(thread=True) — calling it directly executes synchronously
-    # in test context if Textual's work runtime isn't set; we patch to assert invocation.
     fake_runner = MagicMock()
     monkeypatch.setattr(stub, "_run_recommend", fake_runner)
     stub._start_recommend_worker()
@@ -235,22 +233,15 @@ def test_on_recommend_count_selected_clamps_invalid(stub, monkeypatch) -> None:
 
 
 def test_recommend_done_state_does_not_carry_stale_selectables(stub, monkeypatch) -> None:
-    """Regression: after a generation, _items must NOT still point to the mode selector.
-
-    Otherwise pressing Enter on the done screen re-triggers `recommend_library` and
-    relaunches the whole pipeline.
-    """
+    """Regression: after a generation, _items must NOT still point to the mode selector."""
     monkeypatch.setenv("LASTFM_API_KEY", "fake")
     stub._start_recommendations()
-    # User picked a mode → worker would normally run. Simulate completion.
     assert stub._view == "recommend_select_mode"
     stale_keys = {item[0] for item in stub._items if item is not None}
     assert "recommend_library" in stale_keys  # confirm the bug surface
 
     stub._on_recommend_done(GenerationResult(imported=5))
     assert stub._view == "recommend_done"
-    # _core.action_select must short-circuit when _view == "recommend_done" instead
-    # of consulting _items — verified via the dispatcher path in test_core_dispatch.
 
 
 def test_top_library_genres_returns_sorted_unique(stub) -> None:

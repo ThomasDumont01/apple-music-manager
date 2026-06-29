@@ -40,8 +40,7 @@ _DEFAULT_WIDGET_COVERS_DIR = os.path.expanduser(
     "~/Library/Application Support/Übersicht/widgets/music-manager.assets"
 )
 _SYNCED_WIDGET_COVERS_DIR = (
-    "/Users/thomas/SynologyDrive/perso/codage/Übersicht/widgets/"
-    "music-manager.assets"
+    "/Users/thomas/SynologyDrive/perso/codage/Übersicht/widgets/music-manager.assets"
 )
 _WIDGET_COVERS_DIR = os.environ.get(
     "MUSIC_MANAGER_WIDGET_ASSETS_DIR",
@@ -153,9 +152,7 @@ def _playlists(limit: int) -> list[dict]:
 
         # Exclut le dossier "for me" (recos Apple Music) : ces playlists
         # ne doivent jamais apparaître dans le widget, même via "Voir tout".
-        raw = list_playlists_with_covers(
-            _WIDGET_COVERS_DIR, exclude_folder="for me"
-        )
+        raw = list_playlists_with_covers(_WIDGET_COVERS_DIR, exclude_folder="for me")
     except Exception:  # noqa: BLE001
         return []
 

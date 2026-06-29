@@ -55,9 +55,7 @@ def main(args: list[str]) -> int:
     configure("fr")
 
     try:
-        payload = fetch_playlist_preview(
-            parsed.playlist_id, max_tracks=parsed.max_tracks
-        )
+        payload = fetch_playlist_preview(parsed.playlist_id, max_tracks=parsed.max_tracks)
     except Exception as exc:  # noqa: BLE001
         sys.stdout.write(json.dumps({"error": str(exc)[:200]}))
         return 1

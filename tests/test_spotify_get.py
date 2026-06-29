@@ -61,9 +61,7 @@ def test_retries_on_401_with_forced_refresh(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(spotify, "_ensure_fresh_access_token", fake_ensure)
     responses = [_mock_response(401, None), _mock_response(200, {"ok": True})]
-    monkeypatch.setattr(
-        spotify, "http_get", lambda url, headers=None: responses.pop(0)
-    )
+    monkeypatch.setattr(spotify, "http_get", lambda url, headers=None: responses.pop(0))
     assert spotify.spotify_get("/protected") == {"ok": True}
 
 
@@ -85,9 +83,7 @@ def test_no_retry_when_no_refresh_token(monkeypatch: pytest.MonkeyPatch) -> None
 def test_circuit_breaker_after_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(spotify, "_ensure_fresh_access_token", lambda **_k: "AT")
     monkeypatch.setattr(spotify, "is_authenticated", lambda: False)
-    monkeypatch.setattr(
-        spotify, "http_get", lambda url, headers=None: _mock_response(500, None)
-    )
+    monkeypatch.setattr(spotify, "http_get", lambda url, headers=None: _mock_response(500, None))
     for idx in range(spotify._CIRCUIT_BREAKER_THRESHOLD):
         spotify.spotify_get(f"/url_{idx}")
     assert spotify._consecutive_failures_sp >= spotify._CIRCUIT_BREAKER_THRESHOLD

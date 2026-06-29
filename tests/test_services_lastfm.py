@@ -164,17 +164,13 @@ def test_api_error_payload_returns_empty(with_api_key) -> None:
 
 def test_http_401_returns_empty(with_api_key) -> None:
     """HTTP 401 from Last.fm → empty list, no crash."""
-    with patch(
-        "music_manager.services.lastfm.http_get", return_value=_response({}, status=401)
-    ):
+    with patch("music_manager.services.lastfm.http_get", return_value=_response({}, status=401)):
         assert lastfm.get_similar_tracks("Radiohead", "Creep") == []
 
 
 def test_http_exception_returns_empty(with_api_key) -> None:
     """Transport exception is swallowed."""
-    with patch(
-        "music_manager.services.lastfm.http_get", side_effect=ConnectionError("offline")
-    ):
+    with patch("music_manager.services.lastfm.http_get", side_effect=ConnectionError("offline")):
         assert lastfm.get_similar_tracks("Radiohead", "Creep") == []
 
 

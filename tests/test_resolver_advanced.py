@@ -529,9 +529,7 @@ class TestDownloadCoverFile:
 
     def test_connection_error_returns_empty(self, tmp_path):
         """ConnectionError caught → empty string."""
-        with patch.object(
-            resolver._SESSION, "get", side_effect=requests.ConnectionError("boom")
-        ):
+        with patch.object(resolver._SESSION, "get", side_effect=requests.ConnectionError("boom")):
             result = resolver.download_cover_file("http://x/c.jpg", str(tmp_path), "cov")
         assert result == ""
 

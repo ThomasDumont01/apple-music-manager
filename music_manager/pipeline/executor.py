@@ -154,8 +154,13 @@ def run_import_pipeline(
                 on_progress(done_count[0], total)
 
     def make_pending(
-        track: Track, reason: str, csv_title: str, csv_artist: str, csv_album: str,
-        dl_path: str = "", actual_duration: int | None = None,
+        track: Track,
+        reason: str,
+        csv_title: str,
+        csv_artist: str,
+        csv_album: str,
+        dl_path: str = "",
+        actual_duration: int | None = None,
         yt_candidates: list[dict] | None = None,
     ) -> PendingTrack:
         return PendingTrack(
@@ -206,9 +211,15 @@ def run_import_pipeline(
                         album=track.album,
                         reason="youtube_not_found",
                     )
-                    record_pending(make_pending(
-                        track, "youtube_failed", csv_title, csv_artist, csv_album,
-                    ))
+                    record_pending(
+                        make_pending(
+                            track,
+                            "youtube_failed",
+                            csv_title,
+                            csv_artist,
+                            csv_album,
+                        )
+                    )
                     continue
 
                 sr = _SearchResult(
@@ -256,7 +267,9 @@ def run_import_pipeline(
 
                 # Download with retry
                 dl_path, actual_duration = _download_with_retry(
-                    sr.yt_url, paths.tmp_dir, download_track,
+                    sr.yt_url,
+                    paths.tmp_dir,
+                    download_track,
                 )
 
                 if dl_path:
@@ -271,11 +284,16 @@ def run_import_pipeline(
                         reason="download_failed",
                         url=sr.yt_url,
                     )
-                    record_pending(make_pending(
-                        sr.track, "youtube_failed",
-                        sr.csv_title, sr.csv_artist, sr.csv_album,
-                        yt_candidates=sr.yt_candidates,
-                    ))
+                    record_pending(
+                        make_pending(
+                            sr.track,
+                            "youtube_failed",
+                            sr.csv_title,
+                            sr.csv_artist,
+                            sr.csv_album,
+                            yt_candidates=sr.yt_candidates,
+                        )
+                    )
                     continue
 
                 # Duration check
@@ -292,12 +310,18 @@ def run_import_pipeline(
                             actual=actual_duration,
                             ratio=round(ratio, 3),
                         )
-                        record_pending(make_pending(
-                            sr.track, "duration_suspect",
-                            sr.csv_title, sr.csv_artist, sr.csv_album,
-                            dl_path=dl_path, actual_duration=actual_duration,
-                            yt_candidates=sr.yt_candidates,
-                        ))
+                        record_pending(
+                            make_pending(
+                                sr.track,
+                                "duration_suspect",
+                                sr.csv_title,
+                                sr.csv_artist,
+                                sr.csv_album,
+                                dl_path=dl_path,
+                                actual_duration=actual_duration,
+                                yt_candidates=sr.yt_candidates,
+                            )
+                        )
                         continue
 
                 dr = _DownloadResult(
@@ -368,10 +392,15 @@ def run_import_pipeline(
                         artist=dr.track.artist,
                         error=str(exc)[:200],
                     )
-                    record_pending(make_pending(
-                        dr.track, "apple_import_failed",
-                        dr.csv_title, dr.csv_artist, dr.csv_album,
-                    ))
+                    record_pending(
+                        make_pending(
+                            dr.track,
+                            "apple_import_failed",
+                            dr.csv_title,
+                            dr.csv_artist,
+                            dr.csv_album,
+                        )
+                    )
                     continue
 
                 # Update store
@@ -414,7 +443,9 @@ def run_import_pipeline(
 
     for i in range(_DOWNLOAD_WORKERS):
         t_dl = threading.Thread(
-            target=downloader, name=f"pipeline-download-{i}", daemon=True,
+            target=downloader,
+            name=f"pipeline-download-{i}",
+            daemon=True,
         )
         threads.append(t_dl)
 

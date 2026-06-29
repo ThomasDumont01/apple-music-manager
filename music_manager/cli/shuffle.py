@@ -31,7 +31,7 @@ def main(_args: list[str]) -> int:
         "            set newX to x1\n"
         "            set newY to y1\n"
         "            try\n"
-        "                tell application \"Finder\" to "
+        '                tell application "Finder" to '
         "set screenBounds to bounds of window of desktop\n"
         "                set newX to (((item 3 of screenBounds) - w) / 2) as integer\n"
         "                set newY to (((item 4 of screenBounds) - h) / 2) as integer\n"

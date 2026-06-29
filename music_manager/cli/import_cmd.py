@@ -147,9 +147,7 @@ def _run_import(
         "cancellable": True,
     }
     _write_status(paths.widget_status_path, status)
-    log_event(
-        "widget_import_start", total=len(isrcs), playlist=playlist_name or None
-    )
+    log_event("widget_import_start", total=len(isrcs), playlist=playlist_name or None)
 
     # Importer pipeline pulled in lazily — avoids loading yt-dlp setup unless
     # we actually run an import (keeps the CLI startup tight).
@@ -170,12 +168,8 @@ def _run_import(
         if existing and existing.get("apple_id"):
             apple_id = str(existing["apple_id"])
             title = str(existing.get("title", ""))
-            status["completed"].append(
-                {"isrc": isrc, "apple_id": apple_id, "title": title}
-            )
-            status["current_title"] = (
-                f"{existing.get('artist', '')} — {title}".strip(" —")
-            )
+            status["completed"].append({"isrc": isrc, "apple_id": apple_id, "title": title})
+            status["current_title"] = f"{existing.get('artist', '')} — {title}".strip(" —")
             log_event("widget_import_skip_existing", isrc=isrc, apple_id=apple_id)
             _write_status(paths.widget_status_path, status)
             continue
@@ -202,9 +196,7 @@ def _run_import(
             status["completed"].append(
                 {"isrc": isrc, "apple_id": track.apple_id, "title": track.title}
             )
-            log_event(
-                "widget_import_done", isrc=isrc, apple_id=track.apple_id
-            )
+            log_event("widget_import_done", isrc=isrc, apple_id=track.apple_id)
         else:
             reason = pending.reason if pending else "no_apple_id"
             status["failed"].append({"isrc": isrc, "reason": reason})
@@ -221,16 +213,10 @@ def _run_import(
     # still create the playlist with whatever was already imported so the user
     # keeps partial progress.
     if playlist_name:
-        success_ids = [
-            entry["apple_id"]
-            for entry in status["completed"]
-            if entry.get("apple_id")
-        ]
+        success_ids = [entry["apple_id"] for entry in status["completed"] if entry.get("apple_id")]
         if success_ids:
             try:
-                status["playlist_added"] = add_to_playlist(
-                    playlist_name, success_ids
-                )
+                status["playlist_added"] = add_to_playlist(playlist_name, success_ids)
             except Exception as exc:  # noqa: BLE001
                 log_event(
                     "widget_playlist_add_failed",
@@ -242,9 +228,7 @@ def _run_import(
             # On télécharge en local (tmp_dir nettoyé par le pipeline), puis
             # AppleScript pour set l'artwork. Échec silencieux par design.
             if playlist_cover_url:
-                _try_set_playlist_cover(
-                    playlist_name, playlist_cover_url, paths.tmp_dir
-                )
+                _try_set_playlist_cover(playlist_name, playlist_cover_url, paths.tmp_dir)
 
     status["status"] = "cancelled" if cancelled else "done"
     status["finished_at"] = _now_iso()
@@ -279,9 +263,7 @@ def _parse_isrcs(raw: str) -> list[str]:
     return isrcs
 
 
-def _spawn_detached(
-    raw_arg: str, playlist_name: str = "", playlist_cover_url: str = ""
-) -> None:
+def _spawn_detached(raw_arg: str, playlist_name: str = "", playlist_cover_url: str = "") -> None:
     """Re-spawn ourselves in a new session so the widget returns immediately."""
     cmd = [sys.executable, "-m", "music_manager", "import-isrcs", raw_arg]
     if playlist_name:

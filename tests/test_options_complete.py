@@ -218,7 +218,10 @@ def test_find_incomplete_multiple_albums(mock_fetch, mock_tl, tmp_path: Path) ->
 @patch(f"{_PATCH}.fetch_album_with_cover")
 @patch(f"{_PATCH}.get_album_tracklist")
 def test_complete_imports_missing_tracks(
-    mock_tl, mock_album, mock_pipeline, tmp_path: Path,
+    mock_tl,
+    mock_album,
+    mock_pipeline,
+    tmp_path: Path,
 ) -> None:
     """Only missing tracks are imported — existing ones skipped via dedup."""
     tracks = Tracks(str(tmp_path / "tracks.json"))

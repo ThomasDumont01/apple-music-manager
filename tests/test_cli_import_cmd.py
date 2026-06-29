@@ -47,9 +47,7 @@ def _track(isrc: str = "FRABC1234567") -> Track:
 
 def test_parse_isrcs_filters_invalid_tokens() -> None:
     """Anti-injection: only canonical 12-char alphanumeric ISRCs survive."""
-    result = import_cmd._parse_isrcs(
-        "FRABC1234567,usum71916175,; rm -rf /,SHORTONE,FRABC1234567"
-    )
+    result = import_cmd._parse_isrcs("FRABC1234567,usum71916175,; rm -rf /,SHORTONE,FRABC1234567")
     # `usum71916175` uppercased = USUM71916175 ✓ ; ";" / "SHORTONE" rejected ;
     # duplicate FRABC1234567 deduped.
     assert result == ["FRABC1234567", "USUM71916175"]
@@ -87,13 +85,9 @@ def test_ignores_stale_ui_lock(env: Paths) -> None:
     Path(env.ui_lock_path).parent.mkdir(parents=True, exist_ok=True)
     Path(env.ui_lock_path).write_text("0")  # PID 0 is never alive
     with (
-        patch(
-            "music_manager.cli.import_cmd.resolve_by_isrc", return_value=None
-        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
         patch("music_manager.cli.import_cmd.init_logger"),
-        patch(
-            "music_manager.cli.import_cmd.configure_resolver"
-        ),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
     ):
         code = import_cmd.main(["FRABC1234567"])
     assert code == import_cmd.EXIT_OK
@@ -147,18 +141,14 @@ def test_run_writes_running_then_done_status(env: Paths) -> None:
 def test_run_records_unresolved_isrc_as_failed(env: Paths) -> None:
     """ISRC not on Deezer → registered in 'failed' but run completes."""
     with (
-        patch(
-            "music_manager.cli.import_cmd.resolve_by_isrc", return_value=None
-        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
     ):
         code = import_cmd.main(["FRABC1234567"])
     assert code == import_cmd.EXIT_OK
     status = json.loads(Path(env.widget_status_path).read_text())
-    assert status["failed"] == [
-        {"isrc": "FRABC1234567", "reason": "not_on_deezer"}
-    ]
+    assert status["failed"] == [{"isrc": "FRABC1234567", "reason": "not_on_deezer"}]
     assert status["completed"] == []
 
 
@@ -197,9 +187,7 @@ def test_run_continues_after_single_failure(env: Paths) -> None:
 def test_run_widget_lock_released_on_exit(env: Paths) -> None:
     """The widget lock is released even when nothing succeeds."""
     with (
-        patch(
-            "music_manager.cli.import_cmd.resolve_by_isrc", return_value=None
-        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
     ):
@@ -259,9 +247,7 @@ def test_dispatcher_empty_args_returns_usage_error() -> None:
 
 
 def test_dispatcher_routes_to_import_isrcs() -> None:
-    with patch(
-        "music_manager.cli.import_cmd.main", return_value=0
-    ) as mock_main:
+    with patch("music_manager.cli.import_cmd.main", return_value=0) as mock_main:
         code = dispatch(["import-isrcs", "FRABC1234567"])
     mock_main.assert_called_once_with(["FRABC1234567"])
     assert code == 0
@@ -299,9 +285,7 @@ def test_playlist_name_appends_apple_ids_to_playlist(env: Paths) -> None:
         ),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist", return_value=2
-        ) as mock_add,
+        patch("music_manager.cli.import_cmd.add_to_playlist", return_value=2) as mock_add,
     ):
         code = import_cmd.main(
             [
@@ -312,9 +296,7 @@ def test_playlist_name_appends_apple_ids_to_playlist(env: Paths) -> None:
         )
 
     assert code == import_cmd.EXIT_OK
-    mock_add.assert_called_once_with(
-        "Mes vibes", ["AP_FRABC1234567", "AP_USUM71916175"]
-    )
+    mock_add.assert_called_once_with("Mes vibes", ["AP_FRABC1234567", "AP_USUM71916175"])
     status = json.loads(Path(env.widget_status_path).read_text())
     assert status["playlist_name"] == "Mes vibes"
     assert status["playlist_added"] == 2
@@ -323,18 +305,12 @@ def test_playlist_name_appends_apple_ids_to_playlist(env: Paths) -> None:
 def test_playlist_skipped_when_all_failed(env: Paths) -> None:
     """All ISRCs fail → add_to_playlist is NOT called (nothing to add)."""
     with (
-        patch(
-            "music_manager.cli.import_cmd.resolve_by_isrc", return_value=None
-        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist"
-        ) as mock_add,
+        patch("music_manager.cli.import_cmd.add_to_playlist") as mock_add,
     ):
-        code = import_cmd.main(
-            ["FRABC1234567", "--playlist-name", "Mes vibes"]
-        )
+        code = import_cmd.main(["FRABC1234567", "--playlist-name", "Mes vibes"])
 
     assert code == import_cmd.EXIT_OK
     mock_add.assert_not_called()
@@ -364,13 +340,9 @@ def test_playlist_only_collects_successful_apple_ids(env: Paths) -> None:
         ),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist", return_value=1
-        ) as mock_add,
+        patch("music_manager.cli.import_cmd.add_to_playlist", return_value=1) as mock_add,
     ):
-        import_cmd.main(
-            ["FRABC1234567,BAD123456789", "--playlist-name", "Chill"]
-        )
+        import_cmd.main(["FRABC1234567,BAD123456789", "--playlist-name", "Chill"])
 
     mock_add.assert_called_once_with("Chill", ["AP_FRABC1234567"])
 
@@ -412,16 +384,12 @@ def test_playlist_cover_url_triggers_artwork_set(env: Paths) -> None:
         ),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist", return_value=1
-        ),
+        patch("music_manager.cli.import_cmd.add_to_playlist", return_value=1),
         patch(
             "music_manager.services.resolver.download_cover_file",
             return_value="/tmp/playlist_cover.jpg",
         ) as mock_dl,
-        patch(
-            "music_manager.cli.import_cmd.set_playlist_artwork", return_value=True
-        ) as mock_art,
+        patch("music_manager.cli.import_cmd.set_playlist_artwork", return_value=True) as mock_art,
     ):
         code = import_cmd.main(
             [
@@ -442,15 +410,11 @@ def test_playlist_cover_url_triggers_artwork_set(env: Paths) -> None:
 def test_playlist_cover_url_skipped_when_no_tracks_imported(env: Paths) -> None:
     """All ISRCs fail → no add_to_playlist, no artwork attempt."""
     with (
-        patch(
-            "music_manager.cli.import_cmd.resolve_by_isrc", return_value=None
-        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
         patch("music_manager.cli.import_cmd.add_to_playlist"),
-        patch(
-            "music_manager.cli.import_cmd.set_playlist_artwork"
-        ) as mock_art,
+        patch("music_manager.cli.import_cmd.set_playlist_artwork") as mock_art,
     ):
         code = import_cmd.main(
             [
@@ -511,13 +475,9 @@ def test_already_imported_isrc_added_to_playlist_without_pipeline(env: Paths) ->
         ) as mock_import,
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist", return_value=1
-        ) as mock_add,
+        patch("music_manager.cli.import_cmd.add_to_playlist", return_value=1) as mock_add,
     ):
-        code = import_cmd.main(
-            ["FRABC1234567", "--playlist-name", "Mix"]
-        )
+        code = import_cmd.main(["FRABC1234567", "--playlist-name", "Mix"])
 
     assert code == import_cmd.EXIT_OK
     # Pipeline must NOT have been invoked.
@@ -550,13 +510,9 @@ def test_playlist_name_supports_special_chars(env: Paths) -> None:
         ),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist", return_value=1
-        ) as mock_add,
+        patch("music_manager.cli.import_cmd.add_to_playlist", return_value=1) as mock_add,
     ):
-        import_cmd.main(
-            ["FRABC1234567", "--playlist-name", tricky]
-        )
+        import_cmd.main(["FRABC1234567", "--playlist-name", tricky])
 
     mock_add.assert_called_once()
     assert mock_add.call_args[0][0] == tricky
@@ -656,13 +612,9 @@ def test_partial_playlist_added_on_cancel(env: Paths) -> None:
         ),
         patch("music_manager.cli.import_cmd.init_logger"),
         patch("music_manager.cli.import_cmd.configure_resolver"),
-        patch(
-            "music_manager.cli.import_cmd.add_to_playlist", return_value=1
-        ) as mock_add,
+        patch("music_manager.cli.import_cmd.add_to_playlist", return_value=1) as mock_add,
     ):
-        import_cmd.main(
-            ["FRABC1234567,USUM71916175", "--playlist-name", "Annulée"]
-        )
+        import_cmd.main(["FRABC1234567,USUM71916175", "--playlist-name", "Annulée"])
 
     status = json.loads(Path(env.widget_status_path).read_text())
     assert status["status"] == "cancelled"

@@ -46,9 +46,7 @@ def test_paginates_via_next(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
         _page([{"track": _track(isrc="USXLAST")}], total=100),
     ]
-    monkeypatch.setattr(
-        spotify, "spotify_get", lambda endpoint: pages.pop(0) if pages else None
-    )
+    monkeypatch.setattr(spotify, "spotify_get", lambda endpoint: pages.pop(0) if pages else None)
     out = spotify.fetch_liked_tracks()
     assert len(out["tracks"]) == 51
     assert out["nb_tracks"] == 100

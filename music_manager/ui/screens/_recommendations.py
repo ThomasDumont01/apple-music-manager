@@ -162,8 +162,7 @@ class RecommendationsMixin(_MixinBase):
 
         self._view = "recommend_select_playlist"
         self._items = [
-            (f"recommend_playlist:{name}", f"{name} ({count})")
-            for name, count in playlists
+            (f"recommend_playlist:{name}", f"{name} ({count})") for name, count in playlists
         ]
         self._items.append(None)
         self._items.append(("back", "Retour"))
@@ -242,9 +241,7 @@ class RecommendationsMixin(_MixinBase):
                 on_progress=progress,
             )
         except Exception as exc:  # noqa: BLE001
-            self.app.call_from_thread(
-                self._on_recommend_done, _ErrorResult(message=str(exc))
-            )
+            self.app.call_from_thread(self._on_recommend_done, _ErrorResult(message=str(exc)))
             return
 
         self.app.call_from_thread(self._on_recommend_done, result)
@@ -272,9 +269,7 @@ class RecommendationsMixin(_MixinBase):
         self._set_header(render_sub_header(RECOMMEND_DONE_TITLE))
 
         if isinstance(result, _ErrorResult):
-            self._show_recommend_error(
-                RECOMMEND_ERROR_GENERIC.format(message=result.message)
-            )
+            self._show_recommend_error(RECOMMEND_ERROR_GENERIC.format(message=result.message))
             return
 
         error = getattr(result, "error", "")

@@ -15,7 +15,7 @@ def _stub_deezer(found: dict[str, dict] | None = None):
         prefix = "/track/isrc:"
         if not endpoint.startswith(prefix):
             return None
-        isrc = endpoint[len(prefix):]
+        isrc = endpoint[len(prefix) :]
         return found.get(isrc)
 
     return fake
@@ -40,13 +40,9 @@ def test_processes_standard_csv(
 ) -> None:
     csv = tmp_path / "Workout.csv"
     csv.write_text(
-        "title,artist,album,isrc\n"
-        "Bad Guy,Billie,When We All,USX111\n"
-        "Other,Else,Album,USX222\n"
+        "title,artist,album,isrc\nBad Guy,Billie,When We All,USX111\nOther,Else,Album,USX222\n"
     )
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(
         exportify_process_csv,
         "deezer_get",
@@ -77,13 +73,10 @@ def test_processes_exportify_csv_without_modifying(
 ) -> None:
     csv = tmp_path / "Liked.csv"
     original = (
-        "Track Name,Artist Name(s),Album Name,ISRC\n"
-        "Bad Guy,Billie Eilish,When We All,USX111\n"
+        "Track Name,Artist Name(s),Album Name,ISRC\nBad Guy,Billie Eilish,When We All,USX111\n"
     )
     csv.write_text(original)
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(
         exportify_process_csv,
         "deezer_get",
@@ -102,15 +95,8 @@ def test_skips_tracks_without_isrc(
     tmp_path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     csv = tmp_path / "Mixed.csv"
-    csv.write_text(
-        "title,artist,album,isrc\n"
-        "A,B,C,USX111\n"
-        "D,E,F,\n"
-        "G,H,I,USX222\n"
-    )
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    csv.write_text("title,artist,album,isrc\nA,B,C,USX111\nD,E,F,\nG,H,I,USX222\n")
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(
         exportify_process_csv,
         "deezer_get",
@@ -128,14 +114,8 @@ def test_counts_not_on_deezer(
     tmp_path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     csv = tmp_path / "Mix.csv"
-    csv.write_text(
-        "title,artist,album,isrc\n"
-        "A,B,C,USX111\n"
-        "D,E,F,USX_UNKNOWN\n"
-    )
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    csv.write_text("title,artist,album,isrc\nA,B,C,USX111\nD,E,F,USX_UNKNOWN\n")
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     # Only USX111 is in Deezer; USX_UNKNOWN returns None.
     monkeypatch.setattr(
         exportify_process_csv,
@@ -154,15 +134,8 @@ def test_deduplicates_isrcs(
     tmp_path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     csv = tmp_path / "Dups.csv"
-    csv.write_text(
-        "title,artist,album,isrc\n"
-        "A,B,C,usx111\n"
-        "A,B,C,USX111\n"
-        "D,E,F,USX222\n"
-    )
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    csv.write_text("title,artist,album,isrc\nA,B,C,usx111\nA,B,C,USX111\nD,E,F,USX222\n")
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(
         exportify_process_csv,
         "deezer_get",
@@ -195,9 +168,7 @@ def test_enriches_in_library(
         "deezer_get",
         _stub_deezer({"USX111": _dz_track()}),
     )
-    monkeypatch.setattr(
-        exportify_process_csv, "apple_ids_exist", lambda _ids: {"AP_BG"}
-    )
+    monkeypatch.setattr(exportify_process_csv, "apple_ids_exist", lambda _ids: {"AP_BG"})
     exportify_process_csv.main([str(csv)])
     out = json.loads(capsys.readouterr().out)
     assert out["tracks"][0]["in_library"] is True
@@ -207,9 +178,7 @@ def test_enriches_in_library(
 def test_rejects_relative_path(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     exit_code = exportify_process_csv.main(["./relative.csv"])
     assert exit_code == 1
     out = json.loads(capsys.readouterr().out)
@@ -221,9 +190,7 @@ def test_rejects_non_csv(
 ) -> None:
     other = tmp_path / "data.json"
     other.write_text("{}")
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     exit_code = exportify_process_csv.main([str(other)])
     assert exit_code == 1
     out = json.loads(capsys.readouterr().out)
@@ -233,9 +200,7 @@ def test_rejects_non_csv(
 def test_not_found(
     tmp_path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     exit_code = exportify_process_csv.main([str(tmp_path / "nope.csv")])
     assert exit_code == 1
     out = json.loads(capsys.readouterr().out)
@@ -247,9 +212,7 @@ def test_empty_csv(
 ) -> None:
     csv = tmp_path / "Empty.csv"
     csv.write_text("title,artist,album,isrc\n")
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     exit_code = exportify_process_csv.main([str(csv)])
     assert exit_code == 1
     out = json.loads(capsys.readouterr().out)
@@ -261,9 +224,7 @@ def test_source_path_included(
 ) -> None:
     csv = tmp_path / "X.csv"
     csv.write_text("title,artist,album,isrc\nA,B,C,USX111\n")
-    monkeypatch.setattr(
-        exportify_process_csv, "load_config", lambda: {"data_root": ""}
-    )
+    monkeypatch.setattr(exportify_process_csv, "load_config", lambda: {"data_root": ""})
     monkeypatch.setattr(
         exportify_process_csv,
         "deezer_get",

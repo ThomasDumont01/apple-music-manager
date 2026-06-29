@@ -11,9 +11,7 @@ from music_manager.cli import dispatch, play
 @pytest.fixture(autouse=True)
 def _silent_music_launch(monkeypatch):
     """Tests never actually launch Music — mock the open + sleep helpers."""
-    monkeypatch.setattr(
-        "music_manager.cli.play._music_was_running", lambda: True
-    )
+    monkeypatch.setattr("music_manager.cli.play._music_was_running", lambda: True)
     monkeypatch.setattr(
         "music_manager.cli.play.subprocess.run",
         lambda *a, **k: type("R", (), {"returncode": 0})(),
@@ -23,9 +21,7 @@ def _silent_music_launch(monkeypatch):
 
 def test_play_invokes_applescript_with_apple_id(capsys: pytest.CaptureFixture) -> None:
     """A valid apple_id is forwarded to AppleScript: reveal album view + play."""
-    with patch(
-        "music_manager.cli.play.run_applescript", return_value=""
-    ) as mock_script:
+    with patch("music_manager.cli.play.run_applescript", return_value="") as mock_script:
         code = play.main(["9878CAFBC2B2BB75"])
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
@@ -41,9 +37,7 @@ def test_play_invokes_applescript_with_apple_id(capsys: pytest.CaptureFixture) -
 
 def test_play_normalizes_lowercase_input(capsys: pytest.CaptureFixture) -> None:
     """Apple persistent IDs canonicalize to uppercase before validation."""
-    with patch(
-        "music_manager.cli.play.run_applescript", return_value=""
-    ) as mock_script:
+    with patch("music_manager.cli.play.run_applescript", return_value="") as mock_script:
         play.main(["9878cafbc2b2bb75"])
     assert "9878CAFBC2B2BB75" in mock_script.call_args[0][0]
 

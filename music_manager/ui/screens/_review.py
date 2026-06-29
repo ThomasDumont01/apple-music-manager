@@ -501,7 +501,9 @@ class ReviewMixin(_MixinBase):
         if search_type == "deezer":
             open_url_over_music(f"https://www.deezer.com/search/{quote_plus(query)}")
         else:
-            open_url_over_music(f"https://www.youtube.com/results?search_query={quote_plus(query)}")
+            open_url_over_music(
+                f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+            )
 
         self._search_type = search_type
         self._view = "search_input"

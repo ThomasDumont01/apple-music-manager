@@ -108,9 +108,7 @@ class SignalsLog:
             return []
         target = isrc.upper()
         return [
-            event
-            for event in self.iter_events()
-            if str(event.get("isrc") or "").upper() == target
+            event for event in self.iter_events() if str(event.get("isrc") or "").upper() == target
         ]
 
     def count(self) -> int:
@@ -143,12 +141,8 @@ class SignalsLog:
 
     # ── Private ──────────────────────────────────────────────────────────────
 
-    def _affinity(
-        self, key: str, *, window_days: int, min_samples: int
-    ) -> dict[str, float]:
-        cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat(
-            timespec="seconds"
-        )
+    def _affinity(self, key: str, *, window_days: int, min_samples: int) -> dict[str, float]:
+        cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat(timespec="seconds")
         sums: dict[str, float] = {}
         counts: dict[str, int] = {}
         for event in self.iter_events(since=cutoff):

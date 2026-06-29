@@ -80,9 +80,7 @@ def get_top_tracks_by_tag(tag: str, *, limit: int = 50) -> list[dict]:
     """Return top tracks for a Last.fm tag (e.g. "chill", "indie")."""
     if not tag:
         return []
-    data = _lastfm_get(
-        "tag.gettoptracks", {"tag": tag, "limit": str(limit)}
-    )
+    data = _lastfm_get("tag.gettoptracks", {"tag": tag, "limit": str(limit)})
     if not data:
         return []
     raw = _extract_list(data, "tracks", "track")

@@ -62,9 +62,7 @@ def test_search_outputs_stable_json_schema(capsys: pytest.CaptureFixture) -> Non
 
 def test_search_passes_limit_argument(capsys: pytest.CaptureFixture) -> None:
     """--limit is forwarded to the resolver."""
-    with patch(
-        "music_manager.cli.search.search_deezer_free", return_value=[]
-    ) as mock_search:
+    with patch("music_manager.cli.search.search_deezer_free", return_value=[]) as mock_search:
         search.main(["query", "--limit", "5"])
     mock_search.assert_called_once_with("query", 5)
 
@@ -94,9 +92,7 @@ def test_search_handles_resolver_exception(capsys: pytest.CaptureFixture) -> Non
 
 def test_search_default_limit_is_ten(capsys: pytest.CaptureFixture) -> None:
     """Without --limit, the CLI defaults to 10 results."""
-    with patch(
-        "music_manager.cli.search.search_deezer_free", return_value=[]
-    ) as mock_search:
+    with patch("music_manager.cli.search.search_deezer_free", return_value=[]) as mock_search:
         search.main(["query"])
     mock_search.assert_called_once_with("query", 10)
 
@@ -185,9 +181,7 @@ def test_search_marks_track_not_in_library(
     data_root = tmp_path / "music"
     data_root.mkdir()
     (data_root / ".data").mkdir()
-    (data_root / ".data" / "tracks.json").write_text(
-        '{"AP1": {"isrc": "OTHERXXX0000"}}'
-    )
+    (data_root / ".data" / "tracks.json").write_text('{"AP1": {"isrc": "OTHERXXX0000"}}')
     monkeypatch.setattr(
         "music_manager.cli.search.load_config",
         lambda: {"data_root": str(data_root)},
@@ -222,9 +216,7 @@ def test_search_works_without_tracks_json(
     assert payload[0]["in_library"] is False
 
 
-def test_search_works_without_data_root(
-    monkeypatch, capsys: pytest.CaptureFixture
-) -> None:
+def test_search_works_without_data_root(monkeypatch, capsys: pytest.CaptureFixture) -> None:
     """Unconfigured data root → in_library=False, no crash."""
     monkeypatch.setattr(
         "music_manager.cli.search.load_config",
@@ -246,9 +238,7 @@ def test_search_ignores_case_when_matching_isrc(
     data_root = tmp_path / "music"
     data_root.mkdir()
     (data_root / ".data").mkdir()
-    (data_root / ".data" / "tracks.json").write_text(
-        '{"AP1": {"isrc": "frabc1234567"}}'
-    )
+    (data_root / ".data" / "tracks.json").write_text('{"AP1": {"isrc": "frabc1234567"}}')
     monkeypatch.setattr(
         "music_manager.cli.search.load_config",
         lambda: {"data_root": str(data_root)},
@@ -309,9 +299,7 @@ def test_search_skips_apple_check_when_no_candidates(
     data_root.mkdir()
     (data_root / ".data").mkdir()
     # tracks.json exists but ISRC doesn't match the search result.
-    (data_root / ".data" / "tracks.json").write_text(
-        '{"AP1": {"isrc": "OTHER0000001"}}'
-    )
+    (data_root / ".data" / "tracks.json").write_text('{"AP1": {"isrc": "OTHER0000001"}}')
     monkeypatch.setattr(
         "music_manager.cli.search.load_config",
         lambda: {"data_root": str(data_root)},
@@ -321,9 +309,7 @@ def test_search_skips_apple_check_when_no_candidates(
             "music_manager.cli.search.search_deezer_free",
             return_value=[_deezer_item(isrc="FRABC1234567")],
         ),
-        patch(
-            "music_manager.cli.search.apple_ids_exist"
-        ) as mock_check,
+        patch("music_manager.cli.search.apple_ids_exist") as mock_check,
     ):
         search.main(["q"])
     mock_check.assert_not_called()

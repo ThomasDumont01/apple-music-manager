@@ -59,12 +59,10 @@ def main(args: list[str]) -> int:
         if isinstance(item, dict) and library_index.get((item.get("isrc") or "").upper())
     ]
     alive = apple_ids_exist(candidate_ids) if candidate_ids else set()
-    library_index = {
-        isrc: aid for isrc, aid in library_index.items() if aid in alive
-    } if candidate_ids else {}
-    results = [
-        _format_track(item, library_index) for item in raw if isinstance(item, dict)
-    ]
+    library_index = (
+        {isrc: aid for isrc, aid in library_index.items() if aid in alive} if candidate_ids else {}
+    )
+    results = [_format_track(item, library_index) for item in raw if isinstance(item, dict)]
     sys.stdout.write(json.dumps(results, ensure_ascii=False))
     return 0
 
@@ -110,9 +108,7 @@ def _format_track(item: dict, library_index: dict[str, str]) -> dict:
         "deezer_id": int(item.get("id") or 0),
         "duration": int(item.get("duration") or 0),
         "preview_url": str(item.get("preview") or ""),
-        "cover_url": str(
-            album_obj.get("cover_medium") or album_obj.get("cover") or ""
-        ),
+        "cover_url": str(album_obj.get("cover_medium") or album_obj.get("cover") or ""),
         "explicit": bool(item.get("explicit_lyrics")),
         "in_library": bool(apple_id),
         "apple_id": apple_id,

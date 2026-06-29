@@ -16,6 +16,7 @@ Recently Played…) are hidden.
 
 import os
 import re
+from collections.abc import Iterable
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -127,14 +128,9 @@ def list_playlists_with_covers(
                 persistent_id = ""
             items = playlist.items()
             cover_path = _extract_playlist_artwork(playlist, auto_dir)
-            mosaic_cover_paths = (
-                [] if cover_path else _extract_track_artworks(items, auto_dir)
-            )
+            mosaic_cover_paths = [] if cover_path else _extract_track_artworks(items, auto_dir)
             count = len(items) if items else 0
-            is_favorite = (
-                name in favorited_names
-                or _is_favorited(playlist)
-            )
+            is_favorite = name in favorited_names or _is_favorited(playlist)
             result.append(
                 {
                     "name": name,
@@ -280,7 +276,9 @@ def _extract_playlist_artwork(playlist: object, auto_dir: str) -> str:
         return ""
 
 
-def _extract_track_artworks(items: object, auto_dir: str, limit: int = 4) -> list[str]:
+def _extract_track_artworks(
+    items: Iterable[object] | None, auto_dir: str, limit: int = 4
+) -> list[str]:
     """Extract up to ``limit`` track artworks for playlist fallback mosaics."""
     if not items:
         return []
