@@ -352,6 +352,81 @@ def fetch_spotify_playlist_preview(playlist_id: str, max_tracks: int = 500) -> d
     }
 
 
+def resolve_artist_id(artist_name: str) -> str:
+    """Return the Spotify artist ID for ``artist_name``, or "" if unknown.
+
+    Uses ``/search?type=artist`` and picks the top result. Requires the
+    user to be authenticated (``spotify-login``); returns "" otherwise
+    so callers can silently fall back to Deezer-only sources.
+    """
+    if not artist_name:
+        return ""
+    query = urllib.parse.quote(artist_name)
+    data = spotify_get(f"/search?type=artist&limit=1&q={query}")
+    if not data:
+        return ""
+    artists = ((data.get("artists") or {}).get("items") or [])
+    if not isinstance(artists, list) or not artists:
+        return ""
+    first = artists[0]
+    if not isinstance(first, dict):
+        return ""
+    return str(first.get("id") or "")
+
+
+def fetch_related_artists(artist_id: str) -> list[dict]:
+    """Return related artists for ``artist_id`` in the widget shape.
+
+    Uses ``/artists/{id}/related-artists`` — still supported for existing
+    Development-mode apps.
+    """
+    if not artist_id:
+        return []
+    encoded = urllib.parse.quote(artist_id, safe="")
+    data = spotify_get(f"/artists/{encoded}/related-artists")
+    if not data:
+        return []
+    artists = data.get("artists") or []
+    if not isinstance(artists, list):
+        return []
+    return [
+        {
+            "spotify_id": str(item.get("id") or ""),
+            "name": str(item.get("name") or ""),
+            "popularity": int(item.get("popularity") or 0),
+            "image_url": _extract_image(item.get("images") or []),
+        }
+        for item in artists
+        if isinstance(item, dict) and item.get("id")
+    ]
+
+
+def fetch_artist_top_tracks(artist_id: str, *, market: str = "FR") -> list[dict]:
+    """Return an artist's Spotify top tracks in the widget-preview shape.
+
+    Each item mirrors ``_build_spotify_track_entry`` output (isrc, title,
+    artist, cover_url, preview_url) so it plugs straight into the
+    ecosystem pipeline without extra normalization.
+    """
+    if not artist_id:
+        return []
+    encoded = urllib.parse.quote(artist_id, safe="")
+    data = spotify_get(f"/artists/{encoded}/top-tracks?market={market}")
+    if not data:
+        return []
+    raw = data.get("tracks") or []
+    if not isinstance(raw, list):
+        return []
+    tracks: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        entry, has_isrc = _build_spotify_track_entry({"track": item})
+        if has_isrc:
+            tracks.append(entry)
+    return tracks
+
+
 def fetch_liked_tracks(max_tracks: int = 500) -> dict:
     """Return the user's liked tracks in the same shape as a playlist preview.
 

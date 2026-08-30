@@ -11,6 +11,7 @@ All Deezer and iTunes API calls are encapsulated here.
 import threading
 import time
 import urllib.parse
+from collections import deque
 from typing import Any
 
 import requests
@@ -24,8 +25,18 @@ from music_manager.services.albums import Albums
 _DEEZER_BASE = "https://api.deezer.com"
 _ITUNES_BASE = "https://itunes.apple.com"
 _HEADERS = {"Accept-Language": "en-US,en;q=0.9"}
-_REQUEST_DELAY = 0.1
+_REQUEST_DELAY = 0.1  # per-call pacing for the iTunes cover search
 _REQUEST_TIMEOUT = 10
+# Deezer allows roughly 50 requests per 5 s window, per IP. A per-call
+# sleep only paced a single thread: the recommendation feed fans out over
+# nested thread pools and multiplied that rate by its worker count. The
+# budget has to be global, so keep it here and leave headroom.
+_DEEZER_MAX_CALLS = 45
+_DEEZER_PERIOD = 5.0
+# A throttled call is worth retrying: the limiter is per-process, so
+# concurrent CLI invocations share the quota without sharing the budget.
+_DEEZER_TRANSIENT_ATTEMPTS = 3
+_DEEZER_RETRY_BACKOFF = 2.0  # seconds, multiplied by the attempt number
 _ITUNES_COUNTRY = "US"  # set at startup via configure()
 _SESSION = requests.Session()  # connection pooling (1.9x speedup on API calls)
 
@@ -47,9 +58,45 @@ _COMPILATION_ARTISTS = frozenset(
     }
 )
 
+
+class _RateLimiter:
+    """Sliding-window rate limiter shared by every thread hitting one API.
+
+    ``acquire()`` blocks until the caller fits inside the budget. The window
+    is a deque of timestamps rather than a token bucket so a burst that fits
+    the quota still goes through at full speed.
+    """
+
+    def __init__(self, max_calls: int, period: float) -> None:
+        self._max_calls = max(1, max_calls)
+        self._period = period
+        self._calls: deque[float] = deque()
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        """Block until one call fits inside the window, then record it."""
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                while self._calls and now - self._calls[0] >= self._period:
+                    self._calls.popleft()
+                if len(self._calls) < self._max_calls:
+                    self._calls.append(now)
+                    return
+                wait = self._period - (now - self._calls[0])
+            time.sleep(max(0.01, wait))
+
+
+_DEEZER_LIMITER = _RateLimiter(_DEEZER_MAX_CALLS, _DEEZER_PERIOD)
+
 # Circuit breaker: skip requests after N consecutive failures
 _CIRCUIT_BREAKER_THRESHOLD = 5
 _CIRCUIT_BREAKER_COOLDOWN = 60  # seconds
+
+# Deezer error codes that mean "come back later" rather than "doesn't exist".
+# 4 = Quota limit exceeded, 700 = Service busy, 500 = internal error.
+_DEEZER_TRANSIENT_CODES = frozenset({4, 500, 700})
+_DEEZER_TRANSIENT_HINTS = ("quota", "limit exceeded", "service busy", "try again")
 _consecutive_failures = 0
 _circuit_open_until = 0.0
 
@@ -533,8 +580,21 @@ def _pick_best_cover(deezer_url: str, itunes_url: str) -> str:
     return itunes_url
 
 
-def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
-    """Fetch album data from Deezer + best cover from iTunes. Cache in albums_store."""
+def fetch_album_preview(album_id: int, albums_store: Albums) -> dict:
+    """Album data for a *preview* — Deezer only, no iTunes cover search.
+
+    Recommendation cards need a thumbnail and the ranking signals (genre,
+    release date), not the 3000x3000 artwork that only matters once a track
+    is actually imported. Skipping iTunes here is what keeps a feed build
+    from firing a few hundred cover searches and getting rate-limited.
+
+    The result is cached but flagged ``cover_hd: False``. albums.json feeds
+    the import path, so an unflagged Deezer-only cover would silently
+    downgrade the artwork of every track later imported from that album —
+    ``fetch_album_with_cover`` treats a flagged entry as a miss and upgrades
+    it. Without caching at all, every feed rebuild would re-fetch every
+    album and spend its whole rate-limit budget on artwork.
+    """
     if not album_id:
         return {}
     cached = albums_store.get(album_id)
@@ -544,21 +604,29 @@ def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
     album_data = deezer_get(f"/album/{album_id}")
     if not album_data or "error" in album_data:
         return {}
+    result = _album_fields(album_id, album_data)
+    result["cover_hd"] = False
+    albums_store.put(album_id, result)
+    return result
 
-    genres = album_data.get("genres", {}).get("data", [])
-    deezer_cover = album_data.get("cover_xl", "")
-    result = {
-        "id": album_id,
-        "title": album_data.get("title", ""),
-        "artist": album_data.get("artist", {}).get("name", ""),
-        "album_artist": album_data.get("artist", {}).get("name", ""),
-        "genre": genres[0]["name"] if genres else "",
-        "year": (album_data.get("release_date") or "")[:4],
-        "release_date": album_data.get("release_date", ""),
-        "total_tracks": album_data.get("nb_tracks", 0),
-        "total_discs": album_data.get("nb_disk", 0),
-        "cover_url": deezer_cover,
-    }
+
+def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
+    """Fetch album data from Deezer + best cover from iTunes. Cache in albums_store."""
+    if not album_id:
+        return {}
+    cached = albums_store.get(album_id)
+    # Entries predating the flag came from this very function, so a missing
+    # key means HD. Only an explicit False is a preview to be upgraded.
+    if cached and cached.get("cover_hd", True):
+        return cached
+
+    album_data = deezer_get(f"/album/{album_id}")
+    if not album_data or "error" in album_data:
+        return {}
+
+    result = _album_fields(album_id, album_data)
+    result["cover_hd"] = True
+    deezer_cover = result["cover_url"]
 
     try:
         itunes_cover = _itunes_cover(
@@ -576,6 +644,24 @@ def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
 
     albums_store.put(album_id, result)
     return result
+
+
+
+def _album_fields(album_id: int, album_data: dict) -> dict:
+    """Flatten a Deezer /album response into the shape stored in albums.json."""
+    genres = album_data.get("genres", {}).get("data", [])
+    return {
+        "id": album_id,
+        "title": album_data.get("title", ""),
+        "artist": album_data.get("artist", {}).get("name", ""),
+        "album_artist": album_data.get("artist", {}).get("name", ""),
+        "genre": genres[0]["name"] if genres else "",
+        "year": (album_data.get("release_date") or "")[:4],
+        "release_date": album_data.get("release_date", ""),
+        "total_tracks": album_data.get("nb_tracks", 0),
+        "total_discs": album_data.get("nb_disk", 0),
+        "cover_url": album_data.get("cover_xl", ""),
+    }
 
 
 def _itunes_cover(album_title: str, artist: str, year: str = "", total_tracks: int = 0) -> str:
@@ -1161,8 +1247,14 @@ def deezer_get(endpoint: str) -> dict | None:
 
     Uses in-memory cache (LRU-bounded) to avoid redundant calls.
     Thread-safe via _CACHE_LOCK. Circuit breaker after consecutive failures.
+
+    Transient answers (quota, service busy) are retried with a short backoff
+    before counting against the breaker: the rate limiter is per-process, so
+    two CLI invocations launched back to back each think they own the whole
+    Deezer budget and the second one gets throttled through no fault of its
+    own. Deezer's quota window is a few seconds — waiting beats giving up.
     """
-    global _consecutive_failures, _circuit_open_until  # noqa: PLW0603
+    global _consecutive_failures  # noqa: PLW0603
 
     with _CACHE_LOCK:
         if endpoint in _API_CACHE:
@@ -1175,6 +1267,41 @@ def deezer_get(endpoint: str) -> dict | None:
             # Cooldown expired — try again
             _consecutive_failures = 0
 
+    for attempt in range(_DEEZER_TRANSIENT_ATTEMPTS):
+        outcome, data, duration_ms, detail = _deezer_attempt(endpoint)
+
+        if outcome == "transient":
+            if attempt + 1 < _DEEZER_TRANSIENT_ATTEMPTS:
+                time.sleep(_DEEZER_RETRY_BACKOFF * (attempt + 1))
+                continue
+            _record_deezer_failure(endpoint, duration_ms, detail)
+            return None
+
+        if outcome == "failed":
+            _record_deezer_failure(endpoint, duration_ms, detail)
+            return None
+
+        if outcome == "not_found":
+            # Cache genuine "not found" to avoid re-fetching those endpoints
+            _cache_deezer(endpoint, None)
+            # "not found" is normal Deezer behavior, not an error — don't log
+            return None
+
+        _cache_deezer(endpoint, data)
+        # Only log slow requests (>2s) — normal requests are too frequent
+        if duration_ms > 2000:
+            _log_deezer(endpoint, duration_ms, 200)
+        return data
+
+    return None
+
+
+def _deezer_attempt(endpoint: str) -> tuple[str, dict | None, int, str]:
+    """One Deezer round-trip. Returns (outcome, data, duration_ms, detail).
+
+    Outcome is "ok", "not_found", "transient" (worth retrying) or "failed".
+    """
+    _DEEZER_LIMITER.acquire()
     t0 = time.monotonic()
     try:
         response = _SESSION.get(
@@ -1182,49 +1309,71 @@ def deezer_get(endpoint: str) -> dict | None:
             headers=_HEADERS,
             timeout=_REQUEST_TIMEOUT,
         )
-        time.sleep(_REQUEST_DELAY)
         duration_ms = int((time.monotonic() - t0) * 1000)
         if response.status_code != 200:
-            with _CACHE_LOCK:
-                _consecutive_failures += 1
-                _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
-                fails = _consecutive_failures
-            _log_deezer(endpoint, duration_ms, response.status_code)
-            if fails == _CIRCUIT_BREAKER_THRESHOLD:
-                _log_circuit_breaker(fails)
-            return None
+            return "failed", None, duration_ms, str(response.status_code)
         data = response.json()
         if "error" in data:
-            # Cache error to avoid re-fetching "not found" endpoints
-            with _CACHE_LOCK:
-                _consecutive_failures = 0
-                if len(_API_CACHE) >= _CACHE_MAX_SIZE:
-                    oldest = next(iter(_API_CACHE))
-                    del _API_CACHE[oldest]
-                _API_CACHE[endpoint] = None
-            # "not found" is normal Deezer behavior, not an error — don't log
-            return None
-        # Success — reset circuit breaker
-        with _CACHE_LOCK:
-            _consecutive_failures = 0
-            if len(_API_CACHE) >= _CACHE_MAX_SIZE:
-                oldest = next(iter(_API_CACHE))
-                del _API_CACHE[oldest]
-            _API_CACHE[endpoint] = data
-        # Only log slow requests (>2s) — normal requests are too frequent
-        if duration_ms > 2000:
-            _log_deezer(endpoint, duration_ms, 200)
-        return data
+            # Deezer answers HTTP 200 for both "no such track" and "you're
+            # over quota". Caching the second as a permanent None is how a
+            # transient rate limit turned valid tracks into "not on Deezer"
+            # for the rest of the run.
+            if _is_transient_deezer_error(data):
+                return "transient", None, duration_ms, "quota"
+            return "not_found", None, duration_ms, ""
+        return "ok", data, duration_ms, ""
     except (requests.ConnectionError, requests.Timeout) as exc:
         duration_ms = int((time.monotonic() - t0) * 1000)
-        with _CACHE_LOCK:
-            _consecutive_failures += 1
-            _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
-            fails = _consecutive_failures
-        _log_deezer(endpoint, duration_ms, 0, error=True, exc_type=type(exc).__name__)
-        if fails == _CIRCUIT_BREAKER_THRESHOLD:
-            _log_circuit_breaker(fails)
-        return None
+        return "failed", None, duration_ms, type(exc).__name__
+
+
+def _record_deezer_failure(endpoint: str, duration_ms: int, detail: str) -> None:
+    """Count a failed call against the circuit breaker and log it."""
+    global _consecutive_failures, _circuit_open_until  # noqa: PLW0603
+
+    with _CACHE_LOCK:
+        _consecutive_failures += 1
+        _circuit_open_until = time.time() + _CIRCUIT_BREAKER_COOLDOWN
+        fails = _consecutive_failures
+    if detail.isdigit():
+        _log_deezer(endpoint, duration_ms, int(detail))
+    else:
+        _log_deezer(endpoint, duration_ms, 200 if detail == "quota" else 0,
+                    error=True, exc_type=detail)
+    if fails == _CIRCUIT_BREAKER_THRESHOLD:
+        _log_circuit_breaker(fails)
+
+
+def _cache_deezer(endpoint: str, data: dict | None) -> None:
+    """Store a settled result and reset the breaker (LRU-bounded)."""
+    global _consecutive_failures  # noqa: PLW0603
+
+    with _CACHE_LOCK:
+        _consecutive_failures = 0
+        if len(_API_CACHE) >= _CACHE_MAX_SIZE:
+            oldest = next(iter(_API_CACHE))
+            del _API_CACHE[oldest]
+        _API_CACHE[endpoint] = data
+
+
+def _is_transient_deezer_error(data: dict) -> bool:
+    """Return True when Deezer's error payload means "retry later", not "absent".
+
+    Deezer signals rate limiting with ``code 4`` ("Quota limit exceeded") and
+    outages with ``code 700`` ("Service busy"), both over HTTP 200 — the same
+    envelope as ``code 800`` ("no data"), which genuinely means not found.
+    """
+    error = data.get("error")
+    if not isinstance(error, dict):
+        return False
+    try:
+        code = int(error.get("code", 0))
+    except (TypeError, ValueError):
+        code = 0
+    if code in _DEEZER_TRANSIENT_CODES:
+        return True
+    message = str(error.get("message") or "").lower()
+    return any(hint in message for hint in _DEEZER_TRANSIENT_HINTS)
 
 
 def _log_deezer(

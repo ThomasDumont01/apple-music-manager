@@ -35,26 +35,55 @@ All errors are caught and reported via :class:`GenerationResult` — a
 single failure never aborts the run.
 """
 
-import math
 import unicodedata
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 from music_manager.core.config import Paths
 from music_manager.core.logger import log_event
-from music_manager.core.models import Track
 from music_manager.core.profile import Profile, build_profile
-from music_manager.pipeline.dedup import is_duplicate
+from music_manager.pipeline import reco_scoring
 from music_manager.pipeline.importer import cleanup_covers, import_resolved_track
+from music_manager.pipeline.reco_scoring import dedup_and_rank, resolve_candidates
 from music_manager.services import apple, lastfm
 from music_manager.services.albums import Albums
 from music_manager.services.recommendations_store import RecommendationsStore
-from music_manager.services.resolver import build_track, fetch_album_with_cover, search_track
 from music_manager.services.signals import SignalsLog
 from music_manager.services.tracks import Tracks
+
+# ── Legacy re-exports (preserve public API for tests + external callers) ─────
+# Private helpers moved to ``reco_scoring``; re-export the old names so
+# downstream code and the test suite keep working unmodified.
+RecommendationCandidate = reco_scoring.RecommendationCandidate
+_dedup_and_rank = reco_scoring.dedup_and_rank
+_resolve_candidates = reco_scoring.resolve_candidates
+_apply_affinity = reco_scoring._apply_affinity
+_apply_discovery_bonuses = reco_scoring._apply_discovery_bonuses
+_apply_recent_release_bonus = reco_scoring._apply_recent_release_bonus
+_apply_local_artist_playcount_bonus = reco_scoring._apply_local_artist_playcount_bonus
+_local_artist_playcounts = reco_scoring._local_artist_playcounts
+_diversify_by_artist = reco_scoring._diversify_by_artist
+_parse_release_date = reco_scoring._parse_release_date
+
+# Scoring constants — re-exported for tests and future external tooling.
+_GENRE_BONUS = reco_scoring._GENRE_BONUS
+_ARTIST_BONUS = reco_scoring._ARTIST_BONUS
+_LOCAL_ARTIST_PLAYCOUNT_BONUS_MAX = reco_scoring._LOCAL_ARTIST_PLAYCOUNT_BONUS_MAX
+_RECENT_RELEASE_BONUS_MAX = reco_scoring._RECENT_RELEASE_BONUS_MAX
+_RECENT_RELEASE_DAYS = reco_scoring._RECENT_RELEASE_DAYS
+_PLAYCOUNT_LOG_BONUS_MAX = reco_scoring._PLAYCOUNT_LOG_BONUS_MAX
+_MAX_TRACKS_PER_ARTIST = reco_scoring._MAX_TRACKS_PER_ARTIST
+_AFFINITY_ARTIST_BONUS = reco_scoring._AFFINITY_ARTIST_BONUS
+_AFFINITY_ARTIST_MALUS = reco_scoring._AFFINITY_ARTIST_MALUS
+_AFFINITY_GENRE_BONUS = reco_scoring._AFFINITY_GENRE_BONUS
+_AFFINITY_GENRE_MALUS = reco_scoring._AFFINITY_GENRE_MALUS
+_AFFINITY_ARTIST_POS_THRESHOLD = reco_scoring._AFFINITY_ARTIST_POS_THRESHOLD
+_AFFINITY_ARTIST_NEG_THRESHOLD = reco_scoring._AFFINITY_ARTIST_NEG_THRESHOLD
+_AFFINITY_GENRE_POS_THRESHOLD = reco_scoring._AFFINITY_GENRE_POS_THRESHOLD
+_AFFINITY_GENRE_NEG_THRESHOLD = reco_scoring._AFFINITY_GENRE_NEG_THRESHOLD
+_DISCOVERY_FAMILIARITY_MALUS = reco_scoring._DISCOVERY_FAMILIARITY_MALUS
+_DISCOVERY_COLD_ARTIST_BONUS = reco_scoring._DISCOVERY_COLD_ARTIST_BONUS
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -67,62 +96,22 @@ _KNOWN_MODE_PREFIXES = ("genre", "playlist", "mood")
 _SEED_TRACK_COUNT = 50
 _SEED_FALLBACK_TRACK_COUNT = 50
 _MIN_CANDIDATE_POOL = 50
-_DEEZER_RESOLVE_WORKERS = 8
 _TOP_ARTIST_FALLBACK_LIMIT = 5
-_GENRE_BONUS = 12.0
-_ARTIST_BONUS = 6.0
-_LOCAL_ARTIST_PLAYCOUNT_BONUS_MAX = 18.0
-_RECENT_RELEASE_BONUS_MAX = 18.0
-_RECENT_RELEASE_DAYS = 365
 
-# Quality filters / boosts
+# Quality filters — used by _append_unique on raw Last.fm payloads.
 _MIN_LASTFM_MATCH = 0.30
-_PLAYCOUNT_LOG_BONUS_MAX = 25.0  # bonus capped at +25 for ~10M playcount
-_MAX_TRACKS_PER_ARTIST = 2
 
 # Negative reinforcement: skip seeds whose past picks were mostly blacklisted.
 _SEED_BLACKLIST_RATIO_THRESHOLD = 0.5
 
-# Adaptive affinity scoring (Étape 7) — learned from signals.jsonl outcomes
-# over the default 180-day window. Bonuses fire when an artist/genre has
-# proven user resonance; maluses fire when it has been repeatedly rejected.
-_AFFINITY_ARTIST_BONUS = 15.0
-_AFFINITY_ARTIST_MALUS = 20.0
-_AFFINITY_GENRE_BONUS = 10.0
-_AFFINITY_GENRE_MALUS = 15.0
-_AFFINITY_ARTIST_POS_THRESHOLD = 0.5
-_AFFINITY_ARTIST_NEG_THRESHOLD = -0.3
-_AFFINITY_GENRE_POS_THRESHOLD = 0.5
-_AFFINITY_GENRE_NEG_THRESHOLD = -0.3
-
-# Discovery mode tuning (Étape 9) — biases away from the user's comfort
-# zone: narrower Last.fm match band (drops obvious picks above 0.7 and
-# noise below 0.4), penalty on already-known artists, bonus on artists
-# the user has never had in their library.
+# Discovery mode tuning — narrower Last.fm match band on the *raw* Last.fm
+# payload (drops obvious > 0.7 and noise < 0.4). The scoring bonuses that
+# reward cold artists live in ``reco_scoring``.
 _DISCOVERY_LASTFM_MATCH_MIN = 0.4
 _DISCOVERY_LASTFM_MATCH_MAX = 0.7
-_DISCOVERY_FAMILIARITY_MALUS = 10.0
-_DISCOVERY_COLD_ARTIST_BONUS = 20.0
 
 
 # ── Result types ─────────────────────────────────────────────────────────────
-
-
-@dataclass
-class RecommendationCandidate:
-    """A Last.fm candidate already resolved on Deezer (ready to import)."""
-
-    isrc: str
-    deezer_id: int
-    title: str
-    artist: str
-    track: Track
-    # "lastfm_similar" | "lastfm_tag" | "lastfm_artist_similar" | "lastfm_chart"
-    source: str
-    seed_isrc: str
-    score: float
-    match: float = 0.0  # raw Last.fm similarity (0-1)
-    playcount: int = 0  # Last.fm global play count
 
 
 @dataclass
@@ -217,10 +206,10 @@ def generate_recommendations(
     result.candidates_total = len(seeds)
 
     # E. Resolve on Deezer (parallel).
-    resolved = _resolve_candidates(seeds, albums_store, on_progress)
+    resolved = resolve_candidates(seeds, albums_store, on_progress)
 
     # F. Dedup + rank (affinity + discovery boosts).
-    kept, counters = _dedup_and_rank(
+    kept, counters = dedup_and_rank(
         resolved, profile, tracks_store, recs_store, signals=sig, mode=mode
     )
     result.skipped_blacklist = counters["blacklist"]
@@ -767,267 +756,3 @@ def _append_unique(
     )
 
 
-def _resolve_candidates(
-    candidates: list[dict[str, Any]],
-    albums_store: Albums,
-    on_progress: Callable[[str, int, int], None] | None,
-) -> list[RecommendationCandidate]:
-    """Search Deezer for each Last.fm candidate. Drop those that don't map."""
-    total = len(candidates)
-    resolved: list[RecommendationCandidate] = []
-    completed = 0
-
-    def worker(payload: dict[str, Any]) -> RecommendationCandidate | None:
-        if not payload.get("name"):
-            return None
-        try:
-            matches = search_track(payload["name"], payload["artist"])
-        except Exception:  # noqa: BLE001
-            return None
-        if not matches:
-            return None
-        deezer_item = matches[0]
-        album_id = deezer_item.get("album", {}).get("id", 0)
-        try:
-            album_data = fetch_album_with_cover(album_id, albums_store)
-        except Exception:  # noqa: BLE001
-            return None
-        track = build_track(deezer_item, album_data)
-        isrc = (track.isrc or "").upper()
-        if not isrc:
-            return None
-        return RecommendationCandidate(
-            isrc=isrc,
-            deezer_id=track.deezer_id,
-            title=track.title,
-            artist=track.artist,
-            track=track,
-            source=payload["source"],
-            seed_isrc=payload["seed_isrc"],
-            score=float(payload["match"]) * 100.0,
-            match=float(payload["match"]),
-            playcount=int(payload.get("playcount", 0)),
-        )
-
-    with ThreadPoolExecutor(max_workers=_DEEZER_RESOLVE_WORKERS) as pool:
-        futures = [pool.submit(worker, item) for item in candidates]
-        for future in as_completed(futures):
-            completed += 1
-            outcome = future.result()
-            if outcome is not None:
-                resolved.append(outcome)
-            if on_progress:
-                on_progress("resolve", completed, total)
-
-    return resolved
-
-
-def _dedup_and_rank(
-    resolved: list[RecommendationCandidate],
-    profile: Profile,
-    tracks_store: Tracks,
-    recs_store: RecommendationsStore,
-    signals: SignalsLog | None = None,
-    mode: str = "library",
-) -> tuple[list[RecommendationCandidate], dict[str, int]]:
-    """Apply dedup short-circuit, score boosts, then diversify by artist.
-
-    Scoring on top of the Last.fm match base (``match * 100``):
-    - +12 if the candidate genre is one of the user's top genres
-    - +6  if the candidate artist is one of the user's top artists
-    - up to +18 for artists the user actually plays a lot locally
-    - up to +18 for recent releases (linear decay over one year)
-    - up to +25 from a log-scaled Last.fm playcount (popularity safety)
-
-    When ``signals`` is provided and adaptive learning has enough history
-    (``signals.artist_affinity()`` / ``genre_affinity()`` over the default
-    180-day window):
-    - +15 / -20 from artist affinity (thresholds 0.5 / -0.3)
-    - +10 / -15 from genre affinity  (thresholds 0.5 / -0.3)
-
-    Diversification caps the number of tracks per artist to avoid the
-    common "top 20 = 8 tracks from the same band" failure mode.
-    """
-    top_genres = {name.lower() for name, _count in profile.top_genres}
-    top_artists = {name.lower() for name, _score in profile.top_artists}
-    local_artist_playcounts = _local_artist_playcounts(tracks_store)
-    artist_affinity = signals.artist_affinity() if signals else {}
-    genre_affinity = signals.genre_affinity() if signals else {}
-    is_discovery = mode == "discovery"
-    known_artists: set[str] = set()
-    if is_discovery:
-        known_artists = {
-            str(entry.get("artist") or "").lower() for entry in tracks_store.all().values()
-        }
-        known_artists.discard("")
-    counters = {"blacklist": 0, "active": 0, "library": 0, "empty_isrc": 0}
-    seen_isrcs: set[str] = set()
-    kept: list[RecommendationCandidate] = []
-
-    for candidate in resolved:
-        if not candidate.isrc:
-            counters["empty_isrc"] += 1
-            continue
-        if candidate.isrc in seen_isrcs:
-            continue
-        seen_isrcs.add(candidate.isrc)
-
-        if recs_store.is_blacklisted(candidate.isrc):
-            counters["blacklist"] += 1
-            continue
-        if recs_store.is_active(candidate.isrc):
-            counters["active"] += 1
-            continue
-        if is_duplicate(candidate.isrc, candidate.title, candidate.artist, tracks_store):
-            counters["library"] += 1
-            continue
-
-        if candidate.track.genre and candidate.track.genre.lower() in top_genres:
-            candidate.score += _GENRE_BONUS
-        if candidate.artist and candidate.artist.lower() in top_artists:
-            candidate.score += _ARTIST_BONUS
-        _apply_local_artist_playcount_bonus(candidate, local_artist_playcounts)
-        _apply_recent_release_bonus(candidate)
-        if candidate.playcount > 0:
-            # log10(1e7) ≈ 7 → 7 * 3.5 ≈ 24.5, capped at _PLAYCOUNT_LOG_BONUS_MAX.
-            candidate.score += min(math.log10(candidate.playcount) * 3.5, _PLAYCOUNT_LOG_BONUS_MAX)
-
-        _apply_affinity(candidate, artist_affinity, genre_affinity)
-
-        if is_discovery:
-            _apply_discovery_bonuses(candidate, top_artists, known_artists)
-
-        kept.append(candidate)
-
-    kept.sort(key=lambda item: item.score, reverse=True)
-    return _diversify_by_artist(kept), counters
-
-
-def _local_artist_playcounts(tracks_store: Tracks) -> dict[str, int]:
-    """Aggregate Apple Music play_count by artist from the local library."""
-    counts: dict[str, int] = {}
-    for entry in tracks_store.all().values():
-        artist = str(entry.get("artist") or "").strip().lower()
-        if not artist:
-            continue
-        try:
-            play_count = int(entry.get("play_count") or 0)
-        except (TypeError, ValueError):
-            play_count = 0
-        if play_count <= 0:
-            continue
-        counts[artist] = counts.get(artist, 0) + play_count
-    return counts
-
-
-def _apply_local_artist_playcount_bonus(
-    candidate: RecommendationCandidate,
-    local_artist_playcounts: dict[str, int],
-) -> None:
-    """Boost candidates by artists the user repeatedly plays locally."""
-    if not candidate.artist:
-        return
-    play_count = local_artist_playcounts.get(candidate.artist.lower(), 0)
-    if play_count <= 0:
-        return
-    candidate.score += min(
-        math.log1p(play_count) * 4.0,
-        _LOCAL_ARTIST_PLAYCOUNT_BONUS_MAX,
-    )
-
-
-def _apply_recent_release_bonus(
-    candidate: RecommendationCandidate,
-    *,
-    now: datetime | None = None,
-) -> None:
-    """Boost newer releases so recommendations do not overfit old favorites."""
-    release_date = (candidate.track.release_date or "").strip()
-    if not release_date:
-        return
-    released_at = _parse_release_date(release_date)
-    if released_at is None:
-        return
-    current = now or datetime.now(UTC)
-    if released_at.tzinfo is None:
-        released_at = released_at.replace(tzinfo=UTC)
-    age_days = max(0, (current - released_at).days)
-    if age_days > _RECENT_RELEASE_DAYS:
-        return
-    freshness = 1.0 - (age_days / _RECENT_RELEASE_DAYS)
-    candidate.score += _RECENT_RELEASE_BONUS_MAX * freshness
-
-
-def _parse_release_date(value: str) -> datetime | None:
-    """Parse Deezer album release dates without raising."""
-    for fmt, width in (("%Y-%m-%d", 10), ("%Y-%m", 7), ("%Y", 4)):
-        try:
-            return datetime.strptime(value[:width], fmt).replace(tzinfo=UTC)
-        except ValueError:
-            continue
-    return None
-
-
-def _apply_discovery_bonuses(
-    candidate: RecommendationCandidate,
-    top_artists: set[str],
-    known_artists: set[str],
-) -> None:
-    """Bias the candidate toward novelty.
-
-    - Penalize artists the user already knows well (top_artists).
-    - Reward artists never seen in the library (cold artist).
-    """
-    artist_key = candidate.artist.lower()
-    if not artist_key:
-        return
-    if artist_key in top_artists:
-        candidate.score -= _DISCOVERY_FAMILIARITY_MALUS
-    if artist_key not in known_artists:
-        candidate.score += _DISCOVERY_COLD_ARTIST_BONUS
-
-
-def _apply_affinity(
-    candidate: RecommendationCandidate,
-    artist_affinity: dict[str, float],
-    genre_affinity: dict[str, float],
-) -> None:
-    """Bump or dock the candidate's score based on learned affinities."""
-    if candidate.artist:
-        score = artist_affinity.get(candidate.artist.lower())
-        if score is not None:
-            if score >= _AFFINITY_ARTIST_POS_THRESHOLD:
-                candidate.score += _AFFINITY_ARTIST_BONUS
-            elif score <= _AFFINITY_ARTIST_NEG_THRESHOLD:
-                candidate.score -= _AFFINITY_ARTIST_MALUS
-    genre = (candidate.track.genre or "").lower()
-    if genre:
-        score = genre_affinity.get(genre)
-        if score is not None:
-            if score >= _AFFINITY_GENRE_POS_THRESHOLD:
-                candidate.score += _AFFINITY_GENRE_BONUS
-            elif score <= _AFFINITY_GENRE_NEG_THRESHOLD:
-                candidate.score -= _AFFINITY_GENRE_MALUS
-
-
-def _diversify_by_artist(
-    candidates: list[RecommendationCandidate],
-) -> list[RecommendationCandidate]:
-    """Cap the number of tracks per artist while preserving the score order.
-
-    Avoids the common failure mode "top 20 = 8 tracks from the same band".
-    """
-    per_artist: dict[str, int] = {}
-    diversified: list[RecommendationCandidate] = []
-    overflow: list[RecommendationCandidate] = []
-    for candidate in candidates:
-        key = candidate.artist.lower()
-        if per_artist.get(key, 0) < _MAX_TRACKS_PER_ARTIST:
-            diversified.append(candidate)
-            per_artist[key] = per_artist.get(key, 0) + 1
-        else:
-            overflow.append(candidate)
-    # If the diversified list is short (small library, niche genre), top it up
-    # with the overflow so the user still gets a full batch.
-    diversified.extend(overflow)
-    return diversified

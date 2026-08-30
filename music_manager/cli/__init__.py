@@ -92,6 +92,34 @@ def dispatch(args: list[str]) -> int:
         from music_manager.cli.import_cancel import main as cmd  # noqa: PLC0415
 
         return cmd(rest)
+    if name == "import-failures":
+        from music_manager.cli.import_failures import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "recos-feed":
+        from music_manager.cli.recos_feed import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "recos-track-radio":
+        from music_manager.cli.recos_track_radio import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "recos-artist-radio":
+        from music_manager.cli.recos_artist_radio import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "recos-mixes":
+        from music_manager.cli.recos_mixes import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "recos-mix-tracks":
+        from music_manager.cli.recos_mix_tracks import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
+    if name == "recos-playlist-radio":
+        from music_manager.cli.recos_playlist_radio import main as cmd  # noqa: PLC0415
+
+        return cmd(rest)
 
     _print_usage()
     return 2
@@ -108,7 +136,9 @@ def _print_usage() -> None:
         '  search-playlists "query" [--limit N]\n'
         "  playlist-tracks DEEZER_PLAYLIST_ID [--max N]\n"
         '  import-isrcs ISRC1,ISRC2,... [--playlist-name "Name"] [--detach]\n'
+        "               [--run-id ID] [--force]\n"
         "  import-status\n"
+        "  import-failures [--clear]\n"
         "  play APPLE_ID\n"
         '  play-playlist "Playlist Name"\n'
         "  shuffle\n"
@@ -121,6 +151,9 @@ def _print_usage() -> None:
         "  spotify-set-client-id <CLIENT_ID>\n"
         "  exportify-process-csv <ABSOLUTE_PATH>\n"
         "  playlist-local-tracks <NAME>\n"
-        "  import-cancel",
+        "  import-cancel\n"
+        "  recos-feed [--sections=all] [--max-per-section=N] [--force-refresh]\n"
+        "  recos-track-radio <ISRC>\n"
+        '  recos-artist-radio "<artist>"',
         file=sys.stderr,
     )

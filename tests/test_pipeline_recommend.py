@@ -851,9 +851,9 @@ def test_generate_dedup_skips_blacklist(stores, paths, with_api_key) -> None:
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=deezer),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
@@ -885,9 +885,9 @@ def test_generate_dedup_skips_active(stores, paths, with_api_key) -> None:
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=deezer),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(
@@ -933,9 +933,9 @@ def test_generate_dedup_skips_library(stores, paths, with_api_key) -> None:
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=deezer),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(
@@ -980,9 +980,9 @@ def test_generate_ranks_top_target_count(stores, paths, with_api_key) -> None:
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", side_effect=fake_search),
+        patch("music_manager.pipeline.reco_scoring.search_track", side_effect=fake_search),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
@@ -1012,7 +1012,7 @@ def test_generate_isrc_not_on_deezer_dropped(stores, paths, with_api_key) -> Non
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=[]),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=[]),
         patch(
             "music_manager.pipeline.recommend.import_resolved_track", return_value=None
         ) as mock_import,
@@ -1112,11 +1112,11 @@ def test_generate_discovery_mode_runs_without_crash(stores, paths, with_api_key)
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
         patch(
-            "music_manager.pipeline.recommend.search_track",
+            "music_manager.pipeline.reco_scoring.search_track",
             return_value=[_deezer_match("MID1", "Mid", "MidArt")],
         ),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(
@@ -1154,11 +1154,11 @@ def test_generate_logs_imported_and_generation_run_events(stores, paths, with_ap
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
         patch(
-            "music_manager.pipeline.recommend.search_track",
+            "music_manager.pipeline.reco_scoring.search_track",
             return_value=[_deezer_match("REC1", "Hit", "Pop")],
         ),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(
@@ -1205,11 +1205,11 @@ def test_generate_discovery_cold_start_uses_chart_fallback(stores, paths, with_a
             return_value=chart_items,
         ),
         patch(
-            "music_manager.pipeline.recommend.search_track",
+            "music_manager.pipeline.reco_scoring.search_track",
             return_value=[_deezer_match("D1", "Discovery1", "ChartArt1")],
         ),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(
@@ -1260,9 +1260,9 @@ def test_generate_writes_active_to_store(stores, paths, with_api_key) -> None:
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=deezer),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
@@ -1307,9 +1307,9 @@ def test_generate_filters_low_match_candidates(stores, paths, with_api_key) -> N
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", side_effect=fake_search),
+        patch("music_manager.pipeline.reco_scoring.search_track", side_effect=fake_search),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", return_value=None),
@@ -1372,9 +1372,9 @@ def test_generate_diversifies_by_artist(stores, paths, with_api_key) -> None:
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", side_effect=fake_search),
+        patch("music_manager.pipeline.reco_scoring.search_track", side_effect=fake_search),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch("music_manager.pipeline.recommend.import_resolved_track", side_effect=fake_import),
@@ -1422,7 +1422,7 @@ def test_generate_skips_seeds_with_high_blacklist_ratio(stores, paths, with_api_
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", side_effect=fake_similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=[]),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
@@ -1451,7 +1451,7 @@ def test_generate_mood_uses_tag_top_tracks(stores, paths, with_api_key) -> None:
             "music_manager.services.lastfm.get_top_tracks_by_tag", return_value=tag_results
         ) as tag_mock,
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=[]) as similar_mock,
-        patch("music_manager.pipeline.recommend.search_track", return_value=[]),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.get_playlist_tracks", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.list_playlists", return_value=[]),
         patch("music_manager.pipeline.recommend.apple.add_to_playlist_in_folder"),
@@ -1485,9 +1485,9 @@ def test_generate_calls_cleanup_covers_after_import(stores, paths, with_api_key)
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=deezer),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(
@@ -1521,9 +1521,9 @@ def test_generate_cleanup_called_even_when_nothing_imported(stores, paths, with_
 
     with (
         patch("music_manager.services.lastfm.get_similar_tracks", return_value=similar),
-        patch("music_manager.pipeline.recommend.search_track", return_value=deezer),
+        patch("music_manager.pipeline.reco_scoring.search_track", return_value=deezer),
         patch(
-            "music_manager.pipeline.recommend.fetch_album_with_cover",
+            "music_manager.pipeline.reco_scoring.fetch_album_preview",
             return_value={"id": 100, "title": "AlbumX", "cover_url": ""},
         ),
         patch(

@@ -26,6 +26,7 @@ _CLI_COMMANDS = frozenset(
         "playlist-tracks",
         "import-isrcs",
         "import-status",
+        "import-failures",
         "play",
         "play-playlist",
         "shuffle",
@@ -39,6 +40,12 @@ _CLI_COMMANDS = frozenset(
         "exportify-process-csv",
         "playlist-local-tracks",
         "import-cancel",
+        "recos-feed",
+        "recos-track-radio",
+        "recos-artist-radio",
+        "recos-mixes",
+        "recos-mix-tracks",
+        "recos-playlist-radio",
     }
 )
 
@@ -109,7 +116,15 @@ def main() -> None:
     # Two UIs writing to recommendations.json / tracks.json in parallel
     # would corrupt the stores. The lock is acquired by ``MusicApp.on_mount``;
     # here we just refuse to start when a live PID already holds it.
-    from music_manager.cli.lock import is_locked, lock_owner_pid  # noqa: PLC0415
+    from music_manager.cli.lock import (  # noqa: PLC0415
+        clear_stale_lock,
+        is_locked,
+        lock_owner_pid,
+    )
+
+    # A lock left behind by a crashed instance must be dropped now: kept on
+    # disk it eventually matches a recycled PID and locks the user out.
+    clear_stale_lock(paths.ui_lock_path)
 
     if is_locked(paths.ui_lock_path):
         other_pid = lock_owner_pid(paths.ui_lock_path)
