@@ -5,15 +5,23 @@ from pathlib import Path
 from unittest.mock import patch
 
 from music_manager.core.config import Paths
-from music_manager.core.models import Track
+from music_manager.core.models import PendingTrack, Track
 from music_manager.pipeline.importer import (
+    _download_first_usable,
     _download_with_retry,
     cleanup_covers,
+    discard_pending,
     download_cover,
     import_resolved_track,
 )
 from music_manager.services.albums import Albums
 from music_manager.services.tracks import Tracks
+from music_manager.services.youtube import (
+    ERROR_BLOCKED,
+    ERROR_OTHER,
+    ERROR_UNAVAILABLE,
+    DownloadError,
+)
 
 _PATCH = "music_manager.pipeline.importer"
 
@@ -45,7 +53,7 @@ def _paths(tmp_path: Path) -> Paths:
 @patch(f"{_PATCH}.import_file", return_value="AP1")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/x.m4a", 186))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "u"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "u"}], ""))
 def test_duration_exactly_093(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
     """Ratio 0.93 exactly → passes (< not <=)."""
     t = Tracks(str(tmp_path / "t.json"))
@@ -60,7 +68,7 @@ def test_duration_exactly_093(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
 @patch(f"{_PATCH}.import_file", return_value="AP1")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/x.m4a", 214))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "u"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "u"}], ""))
 def test_duration_exactly_107(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
     """Ratio 1.07 exactly → passes."""
     t = Tracks(str(tmp_path / "t.json"))
@@ -71,7 +79,7 @@ def test_duration_exactly_107(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
 
 
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/x.m4a", 185))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "u"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "u"}], ""))
 def test_duration_below_093(m1, m2, tmp_path) -> None:
     """Ratio 0.925 → duration_suspect."""
     t = Tracks(str(tmp_path / "t.json"))
@@ -87,7 +95,7 @@ def test_duration_below_093(m1, m2, tmp_path) -> None:
 @patch(f"{_PATCH}.import_file", return_value="AP1")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/x.m4a", 300))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "u"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "u"}], ""))
 def test_duration_zero_skips_check(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
     """track.duration=0 → duration check skipped."""
     t = Tracks(str(tmp_path / "t.json"))
@@ -102,7 +110,7 @@ def test_duration_zero_skips_check(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
 @patch(f"{_PATCH}.import_file", return_value="AP1")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/x.m4a", None))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "u"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "u"}], ""))
 def test_duration_none_skips_check(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
     """actual_duration=None → duration check skipped."""
     t = Tracks(str(tmp_path / "t.json"))
@@ -120,7 +128,7 @@ def test_duration_none_skips_check(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
 @patch(f"{_PATCH}.import_file", return_value="AP1")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/x.m4a", 200))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "u"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "u"}], ""))
 def test_csv_labels_fallback_to_track(m1, m2, m3, m4, m5, m6, tmp_path) -> None:
     """Empty csv_title/artist/album → falls back to track fields."""
     t = Tracks(str(tmp_path / "t.json"))
@@ -200,8 +208,9 @@ def test_cleanup_covers_only_removes_cover_files(tmp_path: Path) -> None:
 def test_download_with_retry_succeeds_second_try(mock_dl, mock_sleep) -> None:
     """First attempt fails, second succeeds."""
     mock_dl.side_effect = [RuntimeError("fail"), ("/tmp/x.m4a", 200)]
-    path, dur = _download_with_retry("url", "/tmp")
+    path, dur, error = _download_with_retry("url", "/tmp")
     assert path == "/tmp/x.m4a"
+    assert error == ""
     assert mock_dl.call_count == 2
 
 
@@ -209,7 +218,77 @@ def test_download_with_retry_succeeds_second_try(mock_dl, mock_sleep) -> None:
 @patch(f"{_PATCH}.download_track", side_effect=RuntimeError("fail"))
 def test_download_with_retry_all_fail(mock_dl, mock_sleep) -> None:
     """All 3 attempts fail → returns None."""
-    path, dur = _download_with_retry("url", "/tmp")
+    path, dur, error = _download_with_retry("url", "/tmp")
     assert path is None
     assert dur is None
+    assert error == ERROR_OTHER
     assert mock_dl.call_count == 3
+
+
+@patch(f"{_PATCH}.time.sleep")
+@patch(f"{_PATCH}.download_track", side_effect=DownloadError("403", ERROR_BLOCKED))
+def test_download_blocked_is_not_retried(mock_dl, mock_sleep) -> None:
+    """A 403 answers identically every time → fail fast, don't burn 3 requests.
+
+    Regression: the old retry loop re-requested the same blocked URL three
+    times with 3s/9s sleeps, guaranteeing failure and wasting rate budget.
+    """
+    path, _, error = _download_with_retry("url", "/tmp")
+    assert path is None
+    assert error == ERROR_BLOCKED
+    assert mock_dl.call_count == 1
+    mock_sleep.assert_not_called()
+
+
+@patch(f"{_PATCH}.time.sleep")
+@patch(f"{_PATCH}.download_track")
+def test_download_falls_back_to_next_candidate(mock_dl, mock_sleep) -> None:
+    """The best match being blocked must not fail the whole track."""
+    mock_dl.side_effect = [
+        DownloadError("403", ERROR_BLOCKED),
+        ("/tmp/second.m4a", 200),
+    ]
+    candidates = [{"url": "first"}, {"url": "second"}]
+    path, dur, index, error = _download_first_usable(candidates, "/tmp")
+    assert path == "/tmp/second.m4a"
+    assert index == 1
+    assert error == ""
+
+
+@patch(f"{_PATCH}.time.sleep")
+@patch(f"{_PATCH}.download_track", side_effect=DownloadError("gone", ERROR_UNAVAILABLE))
+def test_download_first_usable_reports_last_error(mock_dl, mock_sleep) -> None:
+    """Every candidate exhausted → the last failure code reaches the caller."""
+    path, _, index, error = _download_first_usable([{"url": "a"}, {"url": "b"}], "/tmp")
+    assert path is None
+    assert index == -1
+    assert error == ERROR_UNAVAILABLE
+    assert mock_dl.call_count == 2
+
+
+def test_discard_pending_removes_leftover_audio(tmp_path: Path) -> None:
+    """The widget worker has no review step → it must delete the .m4a itself.
+
+    Regression: duration-suspect downloads leaked into .tmp/ forever.
+    """
+    leftover = tmp_path / "x.m4a"
+    leftover.write_bytes(b"audio")
+    pending = PendingTrack(reason="duration_suspect", dl_path=str(leftover))
+
+    discard_pending(pending)
+
+    assert not leftover.exists()
+    assert pending.dl_path == ""
+
+
+def test_cleanup_covers_also_removes_playlist_artwork(tmp_path: Path) -> None:
+    """playlist_cover.jpg had no owner and survived every run."""
+    tmp_dir = tmp_path / "tmp"
+    tmp_dir.mkdir()
+    (tmp_dir / "cover_1.jpg").write_bytes(b"a")
+    (tmp_dir / "playlist_cover.jpg").write_bytes(b"b")
+    (tmp_dir / "keep.json").write_bytes(b"c")
+
+    cleanup_covers(str(tmp_dir))
+
+    assert {p.name for p in tmp_dir.iterdir()} == {"keep.json"}

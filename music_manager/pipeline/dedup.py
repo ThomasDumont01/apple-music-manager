@@ -14,6 +14,7 @@ def is_duplicate(
     title: str,
     artist: str,
     tracks_store: Tracks,
+    live_apple_ids: set[str] | None = None,
 ) -> bool:
     """Check if a track already exists among IDENTIFIED tracks.
 
@@ -21,6 +22,13 @@ def is_duplicate(
     tracks are ignored to avoid false positives from bad metadata.
 
     Returns True for any identified entry except status "failed".
+
+    ``live_apple_ids`` is the set of persistent IDs currently in Apple Music.
+    When supplied, an entry whose ``apple_id`` is missing from it does **not**
+    count as a duplicate: the store still remembers a track the user has since
+    deleted from Apple Music, and re-importing it is precisely what they want.
+    Omitting the argument keeps the store-only behaviour (callers that have no
+    cheap way to read the library).
 
     Three-level check:
     1. ISRC exact match (fastest, most reliable)
@@ -31,7 +39,12 @@ def is_duplicate(
     isrc = (isrc or "").upper()
 
     def _is_valid(entry: dict) -> bool:
-        return bool(entry.get("deezer_id")) and entry.get("status") != "failed"
+        if not entry.get("deezer_id") or entry.get("status") == "failed":
+            return False
+        if live_apple_ids is None:
+            return True
+        apple_id = str(entry.get("apple_id") or "")
+        return bool(apple_id) and apple_id in live_apple_ids
 
     # By ISRC (exact)
     if isrc:

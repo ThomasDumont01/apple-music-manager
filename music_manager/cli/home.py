@@ -130,6 +130,9 @@ def _format_recent(entry: dict, apple_id: str) -> dict:
         "album": str(entry.get("album") or ""),
         "apple_id": apple_id,
         "cover_url": str(entry.get("cover_url") or ""),
+        # ISRC exposed so the widget can trigger "Radio de ce titre" via
+        # ``recos-track-radio <ISRC>`` without a round-trip to look it up.
+        "isrc": str(entry.get("isrc") or "").upper(),
     }
 
 

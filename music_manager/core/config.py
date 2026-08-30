@@ -7,8 +7,17 @@ Stores user preferences that persist across sessions:
 
 import json
 import os
+import threading
+
+from music_manager.core.io import save_json
 
 # ── Constants ────────────────────────────────────────────────────────────────
+
+# save_config() is a read-modify-write: the recommendation feed builds its
+# sections in parallel and any worker can refresh the Spotify token, so
+# several threads reach this at once. Without the lock they crash on the
+# shared temp file or silently drop each other's keys.
+_CONFIG_LOCK = threading.RLock()
 
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "music_manager")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -51,14 +60,16 @@ def load_config() -> dict[str, object]:
 
 
 def save_config(updates: dict[str, object]) -> None:
-    """Merge updates into existing config and write atomically (tmp + replace)."""
-    current = load_config()
-    current.update(updates)
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    tmp_path = CONFIG_PATH + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as file:
-        json.dump(current, file, ensure_ascii=False, indent=2)
-    os.replace(tmp_path, CONFIG_PATH)
+    """Merge updates into existing config and write atomically. Thread-safe.
+
+    The read and the write are held under one lock so concurrent callers
+    merge onto each other instead of overwriting.
+    """
+    with _CONFIG_LOCK:
+        current = load_config()
+        current.update(updates)
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        save_json(CONFIG_PATH, current)
 
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -84,6 +95,12 @@ class Paths:
         self.widget_lock_path = os.path.join(CONFIG_DIR, ".widget.lock")
         self.widget_status_path = os.path.join(CONFIG_DIR, "widget_status.json")
         self.widget_cancel_path = os.path.join(CONFIG_DIR, ".widget_cancel")
+        # Failures survive the detached worker that produced them, so the
+        # widget can list and retry them instead of losing them on exit.
+        self.widget_failures_path = os.path.join(CONFIG_DIR, "widget_failures.json")
+        # Shared yt-dlp throttle state — every widget import is a new process
+        # and the adaptive backoff must not restart from zero each time.
+        self.youtube_state_path = os.path.join(CONFIG_DIR, ".youtube_throttle.json")
 
         self.playlists_dir = os.path.join(data_root, "playlists")
         self.tmp_dir = os.path.join(data_root, ".tmp")

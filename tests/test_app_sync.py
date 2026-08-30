@@ -1,5 +1,6 @@
 """Tests for ui/app.py — auto_sync logic + widget coordination lock."""
 
+import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -264,7 +265,7 @@ def test_acquire_ui_lock_writes_pid(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     lock_path = Path(paths.ui_lock_path)
     assert lock_path.exists()
-    assert lock_path.read_text() == str(os.getpid())
+    assert json.loads(lock_path.read_text())["pid"] == os.getpid()
 
     # Clean up so subsequent tests don't see a stale lock.
     release_lock(paths.ui_lock_path)

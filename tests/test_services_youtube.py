@@ -11,14 +11,19 @@ import pytest
 
 import music_manager.services.youtube as yt
 from music_manager.services.youtube import (
+    ERROR_BLOCKED,
+    DownloadError,
     _cleanup_partial,
     _find_latest_m4a,
     _parse_output,
     download_track,
+    extract_error,
+    get_use_cookies,
     reset_throttle,
     search_by_isrc,
     set_cookies_callback,
     set_rate_limit_callback,
+    set_use_cookies,
 )
 
 _PATCH = "music_manager.services.youtube"
@@ -96,15 +101,19 @@ def test_search_parses_json_lines(mock_run: MagicMock, mock_log: MagicMock) -> N
 
 @patch(f"{_PATCH}.log_event")
 @patch(f"{_PATCH}.subprocess.run")
-def test_search_uses_ytsearch1(mock_run: MagicMock, mock_log: MagicMock) -> None:
-    """Search uses ytsearch1 (not ytsearch5) to reduce API load."""
+def test_search_asks_for_several_candidates(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """Search asks for several results so a blocked best match has fallbacks.
+
+    Regression: ytsearch1 made ``candidates[1:]`` always empty, so the
+    alternative candidates offered on failure never existed.
+    """
     mock_run.return_value = MagicMock(stdout="", returncode=0)
 
     search_by_isrc("TESTISRC")
 
     cmd = mock_run.call_args[0][0]
     search_arg = [a for a in cmd if "ytsearch" in a][0]
-    assert search_arg == "ytsearch1:TESTISRC"
+    assert search_arg == "ytsearch5:TESTISRC"
 
 
 @patch(f"{_PATCH}.log_event")
@@ -150,14 +159,37 @@ def test_search_timeout_returns_empty(mock_run: MagicMock) -> None:
 @patch(f"{_PATCH}.log_event")
 @patch(f"{_PATCH}.subprocess.run")
 def test_search_missing_fields_default(mock_run: MagicMock, mock_log: MagicMock) -> None:
-    """Missing JSON fields use defaults."""
+    """Missing JSON fields use defaults; the watch URL is derived from the id."""
     mock_run.return_value = MagicMock(stdout=json.dumps({"id": "v1"}) + "\n", returncode=0)
 
     results = search_by_isrc("ISRC1")
     assert results[0]["title"] == ""
-    assert results[0]["url"] == ""
+    assert results[0]["url"] == "https://www.youtube.com/watch?v=v1"
     assert results[0]["duration"] == 0
     assert results[0]["channel"] == ""
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_search_drops_candidates_without_url(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """An entry with neither id nor webpage_url can't be downloaded → dropped."""
+    usable = _make_candidate("v1", "X", "Artist - Topic")
+    mock_run.return_value = MagicMock(
+        stdout=json.dumps({"title": "orphan"}) + "\n" + usable + "\n", returncode=0
+    )
+
+    results = search_by_isrc("ISRC1")
+    assert [r["id"] for r in results] == ["v1"]
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_search_dedupes_repeated_ids(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """The same video returned twice is only offered once."""
+    line = _make_candidate("v1", "X", "Artist - Topic")
+    mock_run.return_value = MagicMock(stdout=f"{line}\n{line}\n", returncode=0)
+
+    assert len(search_by_isrc("ISRC1")) == 1
 
 
 # ── Throttle ─────────────────────────────────────────────────────────────
@@ -760,3 +792,80 @@ def test_download_uses_cookies_flag(mock_run: MagicMock, mock_log: MagicMock) ->
     cmd = mock_run.call_args[0][0]
     assert "--cookies-from-browser" in cmd
     assert "safari" in cmd
+
+
+# ── TCC-blocked cookies ────────────────────────────────────────────────────
+
+
+@patch(f"{_PATCH}.log_event")
+@patch("music_manager.core.config.save_config")
+@patch(f"{_PATCH}.subprocess.run")
+def test_tcc_blocked_cookies_retry_without_backoff(
+    mock_run: MagicMock, mock_save: MagicMock, mock_log: MagicMock
+) -> None:
+    """macOS denying the Safari cookie jar is a local problem, not a YouTube one.
+
+    Regression: it went through the generic error path and cost a ~30s
+    exponential backoff before the (successful) cookie-less retry.
+    """
+    set_use_cookies(True)
+    blocked = MagicMock(
+        returncode=1,
+        stdout="",
+        stderr=(
+            "ERROR: [Errno 1] Operation not permitted: "
+            "'/Users/x/Library/Cookies/Cookies.binarycookies'"
+        ),
+    )
+    ok = MagicMock(stdout=_make_candidate("v1", "X", "Artist - Topic") + "\n", returncode=0)
+    mock_run.side_effect = [blocked, ok]
+
+    with patch(f"{_PATCH}._sleep_backoff") as mock_sleep:
+        results = search_by_isrc("ISRC1")
+
+    assert [r["id"] for r in results] == ["v1"]
+    mock_sleep.assert_not_called()
+    # Cookies are turned off and the choice is persisted.
+    assert get_use_cookies() is False
+    mock_save.assert_called_with({"youtube_cookies": False})
+
+
+@patch(f"{_PATCH}.log_event")
+@patch(f"{_PATCH}.subprocess.run")
+def test_download_error_logs_the_real_error_line(mock_run: MagicMock, mock_log: MagicMock) -> None:
+    """yt-dlp prints its version WARNING first — the ERROR line is what matters.
+
+    Regression: reason=stderr[:200] captured only the warning, so field
+    failures carried no usable cause.
+    """
+    mock_run.return_value = MagicMock(
+        returncode=1,
+        stdout="",
+        stderr=(
+            "WARNING: Your yt-dlp version (2026.03.17) is older than 90 days!\n"
+            "         It is strongly recommended to always use the latest version.\n"
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden\n"
+        ),
+    )
+
+    with pytest.raises(DownloadError) as excinfo:
+        download_track("https://yt/x", "/tmp/dl")
+
+    assert excinfo.value.code == ERROR_BLOCKED
+    logged = [call for call in mock_log.call_args_list if call[0][0] == "youtube_download_failed"]
+    assert logged
+    assert "403" in logged[-1][1]["reason"]
+    assert "WARNING" not in logged[-1][1]["reason"]
+
+
+def test_extract_error_prefers_the_error_line() -> None:
+    stderr = "WARNING: old version\nERROR: boom\n"
+    assert extract_error(stderr) == "ERROR: boom"
+
+
+def test_extract_error_ignores_warnings_when_no_error_line() -> None:
+    assert extract_error("WARNING: old version\nsomething odd\n") == "something odd"
+
+
+def test_extract_error_empty_input() -> None:
+    assert extract_error("") == ""

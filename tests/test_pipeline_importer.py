@@ -8,6 +8,7 @@ from music_manager.core.models import Track
 from music_manager.pipeline.importer import import_resolved_track
 from music_manager.services.albums import Albums
 from music_manager.services.tracks import Tracks
+from music_manager.services.youtube import ERROR_BLOCKED, DownloadError
 
 _PATCH = "music_manager.pipeline.importer"
 
@@ -40,7 +41,10 @@ def _paths(tmp_path: Path) -> Paths:
 @patch(f"{_PATCH}.import_file", return_value="APPLE_NEW")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/song.m4a", 200))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/video", "topic": True}])
+@patch(
+    f"{_PATCH}.search_by_isrc_detailed",
+    return_value=([{"url": "https://yt/video", "topic": True}], ""),
+)
 def test_import_success(
     mock_yt_search, mock_dl, mock_tag, mock_apple, mock_clean, mock_log, tmp_path
 ) -> None:
@@ -70,7 +74,7 @@ def test_import_success(
 # ── YouTube failures ────────────────────────────────────────────────────────
 
 
-@patch(f"{_PATCH}.search_by_isrc", return_value=[])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([], ""))
 def test_import_youtube_no_candidates(mock_search, tmp_path) -> None:
     """No YouTube results → PendingTrack with reason youtube_failed."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
@@ -84,9 +88,12 @@ def test_import_youtube_no_candidates(mock_search, tmp_path) -> None:
 
 
 @patch(f"{_PATCH}.download_track", return_value=(None, None))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/1"}, {"url": "https://yt/2"}])
+@patch(
+    f"{_PATCH}.search_by_isrc_detailed",
+    return_value=([{"url": "https://yt/1"}, {"url": "https://yt/2"}], ""),
+)
 def test_import_youtube_download_fails(mock_search, mock_dl, tmp_path) -> None:
-    """Download fails after retry → PendingTrack with remaining candidates."""
+    """Every candidate failed → all of them stay available for manual review."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
     albums = Albums(str(tmp_path / "albums.json"))
     paths = _paths(tmp_path)
@@ -95,14 +102,56 @@ def test_import_youtube_download_fails(mock_search, mock_dl, tmp_path) -> None:
 
     assert result is not None
     assert result.reason == "youtube_failed"
-    assert len(result.youtube_candidates) == 1  # second candidate preserved
+    assert len(result.youtube_candidates) == 2
+
+
+@patch(f"{_PATCH}.time.sleep")
+@patch(f"{_PATCH}.download_track")
+@patch(
+    f"{_PATCH}.search_by_isrc_detailed",
+    return_value=([{"url": "https://yt/1"}, {"url": "https://yt/2"}], ""),
+)
+def test_import_falls_back_to_second_candidate(mock_search, mock_dl, mock_sleep, tmp_path) -> None:
+    """A blocked best match must not fail the track when an alternative works.
+
+    Regression: search asked for a single result, so there was never anything
+    to fall back to.
+    """
+    mock_dl.side_effect = [DownloadError("403", ERROR_BLOCKED), ("/tmp/song.m4a", 200)]
+    tracks = Tracks(str(tmp_path / "tracks.json"))
+    albums = Albums(str(tmp_path / "albums.json"))
+    paths = _paths(tmp_path)
+
+    with (
+        patch(f"{_PATCH}.tag_audio_file", return_value=True),
+        patch(f"{_PATCH}.import_file", return_value="AP1"),
+        patch(f"{_PATCH}._cleanup"),
+        patch("music_manager.services.tagger.strip_youtube_tags"),
+    ):
+        result = import_resolved_track(_track(), paths, tracks, albums)
+
+    assert result is None
+    assert mock_dl.call_count == 2
+
+
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([], "youtube_blocked"))
+def test_import_reports_precise_search_failure(mock_search, tmp_path) -> None:
+    """ "Not on YouTube" and "YouTube refused" must not look identical."""
+    tracks = Tracks(str(tmp_path / "tracks.json"))
+    albums = Albums(str(tmp_path / "albums.json"))
+
+    result = import_resolved_track(_track(), _paths(tmp_path), tracks, albums)
+
+    assert result is not None
+    assert result.reason == "youtube_failed"
+    assert result.detail == "youtube_blocked"
 
 
 # ── Duration check ──────────────────────────────────────────────────────────
 
 
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/song.m4a", 300))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/1"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "https://yt/1"}], ""))
 def test_import_duration_suspect(mock_search, mock_dl, tmp_path) -> None:
     """Duration ratio outside 0.93-1.07 → PendingTrack duration_suspect."""
     tracks = Tracks(str(tmp_path / "tracks.json"))
@@ -123,7 +172,7 @@ def test_import_duration_suspect(mock_search, mock_dl, tmp_path) -> None:
 @patch(f"{_PATCH}.import_file", return_value="APPLE_NEW")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/song.m4a", 205))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/1"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "https://yt/1"}], ""))
 def test_import_duration_within_tolerance(
     mock_search, mock_dl, mock_tag, mock_apple, mock_clean, mock_log, tmp_path
 ) -> None:
@@ -146,7 +195,7 @@ def test_import_duration_within_tolerance(
 @patch(f"{_PATCH}.import_file", return_value="APPLE_NEW")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/song.m4a", 200))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/1"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "https://yt/1"}], ""))
 def test_import_stores_csv_origin(
     mock_search, mock_dl, mock_tag, mock_apple, mock_clean, mock_log, tmp_path
 ) -> None:

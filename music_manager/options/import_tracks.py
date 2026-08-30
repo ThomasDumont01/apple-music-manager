@@ -62,6 +62,13 @@ def process_csv(
     if isinstance(raw, list):
         ignored_tracks = set(raw)
 
+    # ── Live Apple Music library ─────────────────────────
+    # tracks.json can be ahead of reality: a track the user deleted from Apple
+    # Music is still recorded here, and dedup would then skip the very row
+    # meant to bring it back. Read the library once (iTunesLibrary, ~0.5s for
+    # a few thousand tracks) rather than per row.
+    live_apple_ids = _live_apple_ids()
+
     # ── Detect playlist mode ─────────────────────────────
     is_playlist = os.path.dirname(os.path.abspath(csv_path)) == os.path.abspath(
         paths.playlists_dir
@@ -89,7 +96,7 @@ def process_csv(
             continue
 
         # Dedup check
-        if is_duplicate(isrc, title, artist, tracks_store):
+        if is_duplicate(isrc, title, artist, tracks_store, live_apple_ids):
             result.skipped += 1
             if on_row:
                 on_row(idx, total, title, artist, "skipped")
@@ -181,6 +188,22 @@ def process_csv(
 
 
 # ── Public helpers ───────────────────────────────────────────────────────────
+
+
+def _live_apple_ids() -> set[str] | None:
+    """Return the persistent IDs currently in Apple Music, or None if unknown.
+
+    None means "couldn't read the library" — callers must then fall back to
+    trusting the store, never assume every track is gone.
+    """
+    from music_manager.services.apple import Apple  # noqa: PLC0415
+
+    try:
+        library = Apple().scan()
+    except Exception as exc:  # noqa: BLE001
+        log_event("library_scan_failed", stage="import_csv", reason=str(exc)[:200])
+        return None
+    return set(library) if library else None
 
 
 def find_apple_id(isrc: str, title: str, artist: str, tracks_store: Tracks) -> str:

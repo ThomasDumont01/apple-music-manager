@@ -239,8 +239,20 @@ def apple_ids_exist(apple_ids: list[str]) -> set[str]:
 
     Empty input returns an empty set without spawning a subprocess.
     """
+    _, alive = apple_ids_exist_checked(apple_ids)
+    return alive
+
+
+def apple_ids_exist_checked(apple_ids: list[str]) -> tuple[bool, set[str]]:
+    """Same as ``apple_ids_exist`` but reports whether the query itself worked.
+
+    ``apple_ids_exist`` returns an empty set both when Apple Music says "none
+    of these exist" and when AppleScript couldn't run at all. Callers that act
+    on the absence of a track need to tell those apart, or an unavailable
+    Apple Music turns every known track into a missing one.
+    """
     if not apple_ids:
-        return set()
+        return True, set()
     id_list = ", ".join(f'"{_esc(aid)}"' for aid in apple_ids)
     script = (
         'tell application "Music"\n'
@@ -256,25 +268,27 @@ def apple_ids_exist(apple_ids: list[str]) -> set[str]:
         "    return output\n"
         "end tell"
     )
-    result = run_applescript(script)
-    if not result:
-        return set()
-    return {line.strip() for line in result.split("\n") if line.strip()}
+    ok, result, _ = run_applescript_result(script)
+    if not ok:
+        return False, set()
+    return True, {line.strip() for line in result.split("\n") if line.strip()}
 
 
-def set_playlist_artwork(playlist_name: str, image_path: str) -> bool:
+def set_playlist_artwork(playlist_name: str, image_path: str) -> tuple[bool, str]:
     """Best-effort: set the artwork of a user playlist from an image file.
 
-    Apple Music's AppleScript surface for playlist artwork isn't fully
-    documented and behaviour shifts between macOS releases; callers must
-    treat a False return as "playlist exists but artwork couldn't be set"
-    rather than a hard error. The playlist itself is untouched on failure.
+    Returns ``(ok, error)``. Apple Music's AppleScript surface for playlist
+    artwork isn't fully documented and behaviour shifts between macOS
+    releases; callers must treat a False return as "playlist exists but
+    artwork couldn't be set" rather than a hard error. The playlist itself is
+    untouched on failure. ``error`` carries the AppleScript message so a
+    failure is diagnosable instead of a silent False.
     """
     if not playlist_name or not image_path:
-        return False
+        return False, "missing_argument"
     abs_path = os.path.abspath(image_path)
     if not os.path.isfile(abs_path):
-        return False
+        return False, "image_not_found"
     fmt = "«class PNG »" if abs_path.endswith(".png") else "«class JPEG»"
     escaped_name = _esc(playlist_name)
     script = (
@@ -290,7 +304,8 @@ def set_playlist_artwork(playlist_name: str, image_path: str) -> bool:
         "    end tell\n"
         "end tell"
     )
-    return run_applescript(script) is not None
+    ok, _, error = run_applescript_result(script)
+    return ok, error
 
 
 def get_playlist_membership(
@@ -728,14 +743,22 @@ def get_playlist_tracks(playlist_name: str) -> list[str]:
 
 
 def add_to_playlist(playlist_name: str, apple_ids: list[str] | str) -> int:
-    """Sync CSV tracks into a playlist, preserving manually added tracks.
+    """Append missing tracks to a playlist, in order. Never removes anything.
 
-    1. Collect IDs already in the playlist
-    2. Identify manual tracks (in playlist but not in our list)
-    3. Clear playlist
-    4. Re-add CSV tracks in order
-    5. Re-add manual tracks at the end (preserved)
-    Returns count of NEW tracks (not previously in the playlist).
+    1. Locate the playlist (create it if missing)
+    2. Collect the IDs already in it
+    3. Append the requested tracks that aren't there yet, in the given order
+
+    Returns the count of NEW tracks (not previously in the playlist).
+
+    Deliberately append-only: the previous implementation cleared the playlist
+    and rebuilt it to enforce list order, which meant an AppleScript failure
+    between the delete and the re-add destroyed the user's playlist — and a
+    Deezer playlist that happened to share a name with a personal one silently
+    took it over. On a first import the playlist is empty, so the resulting
+    order is identical; later syncs append instead of reordering.
+
+    Use ``rebuild_playlist`` when a full, ordered rewrite really is intended.
     """
     if isinstance(apple_ids, str):
         apple_ids = [apple_ids]
@@ -761,37 +784,18 @@ def add_to_playlist(playlist_name: str, apple_ids: list[str] | str) -> int:
         "            set end of existingIDs to persistent ID of trk\n"
         "        end repeat\n"
         "    end try\n"
-        # Find manual tracks (in playlist but not in our CSV list)
-        f"    set csvIDs to {{{id_list}}}\n"
-        "    set manualIDs to {}\n"
-        "    repeat with eid in existingIDs\n"
-        "        if csvIDs does not contain (eid as string) then\n"
-        "            set end of manualIDs to eid\n"
-        "        end if\n"
-        "    end repeat\n"
-        # Clear playlist
-        "    try\n"
-        "        delete every track of p\n"
-        "    end try\n"
-        # Re-add CSV tracks in order
+        # Append the ones that aren't in yet, in the requested order
+        f"    set targetIDs to {{{id_list}}}\n"
         "    set addedCount to 0\n"
-        "    repeat with targetId in csvIDs\n"
-        "        try\n"
-        "            set t to first track of library playlist 1"
-        " whose persistent ID is targetId\n"
-        "            duplicate t to p\n"
-        "            if existingIDs does not contain (targetId as string) then\n"
+        "    repeat with targetId in targetIDs\n"
+        "        if existingIDs does not contain (targetId as string) then\n"
+        "            try\n"
+        "                set t to first track of library playlist 1"
+        " whose persistent ID is (targetId as string)\n"
+        "                duplicate t to p\n"
         "                set addedCount to addedCount + 1\n"
-        "            end if\n"
-        "        end try\n"
-        "    end repeat\n"
-        # Re-add manual tracks at the end (preserved)
-        "    repeat with manualId in manualIDs\n"
-        "        try\n"
-        "            set t to first track of library playlist 1"
-        " whose persistent ID is manualId\n"
-        "            duplicate t to p\n"
-        "        end try\n"
+        "            end try\n"
+        "        end if\n"
         "    end repeat\n"
         "    return addedCount\n"
         "end tell"
@@ -808,6 +812,17 @@ def add_to_playlist(playlist_name: str, apple_ids: list[str] | str) -> int:
 
 def run_applescript(script: str) -> str | None:
     """Execute an AppleScript and return stdout. Returns None on error."""
+    ok, output, _ = run_applescript_result(script)
+    return output if ok else None
+
+
+def run_applescript_result(script: str) -> tuple[bool, str, str]:
+    """Execute an AppleScript and return ``(ok, stdout, stderr)``.
+
+    ``run_applescript`` throws the error text away, which is why every
+    AppleScript failure in the logs came without a cause. Callers that report
+    failures to the user should use this variant.
+    """
     try:
         result = subprocess.run(
             ["osascript", "-e", script],
@@ -816,9 +831,13 @@ def run_applescript(script: str) -> str | None:
             timeout=30,
             check=False,
         )
-        return result.stdout.strip() if result.returncode == 0 else None
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
+    except subprocess.TimeoutExpired:
+        return False, "", "osascript timeout"
+    except FileNotFoundError:
+        return False, "", "osascript not found"
+    if result.returncode != 0:
+        return False, "", result.stderr.strip()
+    return True, result.stdout.strip(), ""
 
 
 def open_url_over_music(url: str) -> None:

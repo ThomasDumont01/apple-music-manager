@@ -1,9 +1,17 @@
 """Tests for core/io.py."""
 
 import json
+import threading
 from pathlib import Path
 
-from music_manager.core.io import convert_exportify, load_csv, load_json, save_csv, save_json
+from music_manager.core.io import (
+    convert_exportify,
+    load_csv,
+    load_json,
+    read_csv_flexible,
+    save_csv,
+    save_json,
+)
 
 
 def test_load_json_returns_dict(tmp_path: Path) -> None:
@@ -106,3 +114,131 @@ def test_save_csv_empty(tmp_path):
     save_csv(fp, [])
     loaded = load_csv(fp)
     assert len(loaded) == 0
+
+
+# ── Encoding ───────────────────────────────────────────────────────────────
+
+
+def test_read_csv_flexible_handles_utf8_bom(tmp_path: Path) -> None:
+    """Exportify writes UTF-8 with a BOM.
+
+    Regression: read as plain utf-8, the BOM stayed glued to the first header
+    ("﻿Track Name"), no title column was detected, every row was dropped
+    and the drop-zone answered "empty_csv" on a perfectly valid export.
+    """
+    path = tmp_path / "bom.csv"
+    path.write_text(
+        "Track Name,Artist Name(s),Album Name,ISRC\nBad Guy,Billie Eilish,WAFL,USUM71900764\n",
+        encoding="utf-8-sig",
+    )
+
+    rows = read_csv_flexible(str(path))
+
+    assert rows == [
+        {"title": "Bad Guy", "artist": "Billie Eilish", "album": "WAFL", "isrc": "USUM71900764"}
+    ]
+
+
+def test_convert_exportify_handles_utf8_bom(tmp_path: Path) -> None:
+    """The same BOM must not defeat the in-place conversion either."""
+    path = tmp_path / "playlist.csv"
+    path.write_text(
+        "Track Name,Artist Name(s),Album Name,ISRC\nBad Guy,Billie Eilish,WAFL,USUM71900764\n",
+        encoding="utf-8-sig",
+    )
+
+    assert convert_exportify(str(path)) is True
+    assert load_csv(str(path))[0]["title"] == "Bad Guy"
+
+
+def test_load_csv_survives_undecodable_file(tmp_path: Path) -> None:
+    """A latin-1 CSV must return nothing, not crash the whole launch."""
+    path = tmp_path / "latin.csv"
+    path.write_bytes(b"title,artist\nCaf\xe9,Chanteur\n")
+
+    assert load_csv(str(path)) == []
+
+
+def test_convert_exportify_survives_undecodable_file(tmp_path: Path) -> None:
+    """Startup conversion of a broken CSV returns False instead of raising."""
+    path = tmp_path / "latin.csv"
+    path.write_bytes(b"Track Name,Artist Name(s)\nCaf\xe9,Chanteur\n")
+
+    assert convert_exportify(str(path)) is False
+
+
+# ── Non-destructive conversion ─────────────────────────────────────────────
+
+
+def test_convert_exportify_keeps_the_original(tmp_path: Path) -> None:
+    """Conversion drops every extra Exportify column → keep a pristine copy.
+
+    Regression: the user's own file was overwritten in place, losing added
+    date, duration, popularity and everything else Exportify exports.
+    """
+    path = tmp_path / "playlist.csv"
+    original = (
+        "Track Name,Artist Name(s),Album Name,ISRC,Added At,Popularity\n"
+        "Bad Guy,Billie Eilish,WAFL,USUM71900764,2024-01-02,87\n"
+    )
+    path.write_text(original, encoding="utf-8")
+
+    assert convert_exportify(str(path)) is True
+
+    backup = tmp_path / ".originals" / "playlist.csv"
+    assert backup.exists()
+    assert backup.read_text(encoding="utf-8") == original
+    # The working copy is the reduced, standard-format one.
+    assert path.read_text(encoding="utf-8").splitlines()[0] == "title,artist,album,isrc"
+
+
+def test_convert_exportify_backup_is_not_overwritten(tmp_path: Path) -> None:
+    """A second conversion must not clobber the pristine first backup."""
+    path = tmp_path / "playlist.csv"
+    path.write_text(
+        "Track Name,Artist Name(s),ISRC\nBad Guy,Billie Eilish,USUM71900764\n",
+        encoding="utf-8",
+    )
+    convert_exportify(str(path))
+    backup = tmp_path / ".originals" / "playlist.csv"
+    first = backup.read_text(encoding="utf-8")
+
+    # Standard-format file now: conversion is a no-op, backup stays as it was.
+    convert_exportify(str(path))
+
+    assert backup.read_text(encoding="utf-8") == first
+
+
+# ── save_json — thread safety ────────────────────────────────────────────────
+
+
+def test_save_json_concurrent_writers_never_raise(tmp_path: Path) -> None:
+    """Concurrent save_json() on one path must not crash.
+
+    Regression: the atomic write used a fixed ``<path>.tmp`` for every
+    writer. Two threads wrote that same temp file, the first os.replace()
+    consumed it, and the second died with FileNotFoundError. In the
+    recommendation feed (6 sections built in parallel) this silently killed
+    whole sections — the widget just showed an empty shelf.
+    """
+    path = str(tmp_path / "data.json")
+    errors: list[BaseException] = []
+    barrier = threading.Barrier(8)
+
+    def writer(index: int) -> None:
+        barrier.wait()
+        for _ in range(15):
+            try:
+                save_json(path, {"writer": index})
+            except BaseException as exc:  # noqa: BLE001 - test records everything
+                errors.append(exc)
+
+    threads = [threading.Thread(target=writer, args=(i,)) for i in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == [], f"concurrent save_json raised: {errors[:3]}"
+    # The surviving file must still be readable JSON, never a truncated blob.
+    assert isinstance(load_json(path).get("writer"), int)

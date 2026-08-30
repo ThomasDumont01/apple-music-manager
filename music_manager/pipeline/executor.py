@@ -265,9 +265,11 @@ def run_import_pipeline(
 
                 sr: _SearchResult = item  # type: ignore[assignment]
 
-                # Download with retry
-                dl_path, actual_duration = _download_with_retry(
-                    sr.yt_url,
+                # Download, falling back to the alternative candidates when
+                # the best match is blocked or gone.
+                fallback_urls = [str(c.get("url") or "") for c in sr.yt_candidates]
+                dl_path, actual_duration, used_url = _download_any(
+                    [sr.yt_url, *fallback_urls],
                     paths.tmp_dir,
                     download_track,
                 )
@@ -283,6 +285,7 @@ def run_import_pipeline(
                         artist=sr.track.artist,
                         reason="download_failed",
                         url=sr.yt_url,
+                        candidates_tried=1 + len(fallback_urls),
                     )
                     record_pending(
                         make_pending(
@@ -295,6 +298,8 @@ def run_import_pipeline(
                         )
                     )
                     continue
+
+                remaining = [c for c in sr.yt_candidates if str(c.get("url") or "") != used_url]
 
                 # Duration check
                 if actual_duration and sr.track.duration:
@@ -319,7 +324,7 @@ def run_import_pipeline(
                                 sr.csv_album,
                                 dl_path=dl_path,
                                 actual_duration=actual_duration,
-                                yt_candidates=sr.yt_candidates,
+                                yt_candidates=remaining,
                             )
                         )
                         continue
@@ -491,16 +496,46 @@ def _download_with_retry(
     output_dir: str,
     download_fn: Callable[[str, str], tuple[str, int | None]],
 ) -> tuple[str | None, int | None]:
-    """Download with exponential backoff (3 attempts: 3s, 9s delays)."""
+    """Download with exponential backoff (3 attempts: 3s, 9s delays).
+
+    Permanent failures (403, deleted video) skip the retries — hammering a URL
+    YouTube refuses to serve only costs time and rate-limit budget.
+    """
+    from music_manager.services.youtube import (  # noqa: PLC0415
+        ERROR_OTHER,
+        ERROR_RATE_LIMITED,
+        ERROR_TIMEOUT,
+        DownloadError,
+    )
+
+    retryable = {ERROR_TIMEOUT, ERROR_RATE_LIMITED, ERROR_OTHER}
     for attempt in range(_DOWNLOAD_RETRIES):
         try:
             return download_fn(url, output_dir)
+        except DownloadError as exc:
+            if exc.code not in retryable or attempt >= _DOWNLOAD_RETRIES - 1:
+                return None, None
+            time.sleep(_RETRY_DELAYS[attempt])
         except RuntimeError:
-            if attempt < _DOWNLOAD_RETRIES - 1:
-                time.sleep(_RETRY_DELAYS[attempt])
-                continue
-            return None, None
+            if attempt >= _DOWNLOAD_RETRIES - 1:
+                return None, None
+            time.sleep(_RETRY_DELAYS[attempt])
     return None, None  # pragma: no cover
+
+
+def _download_any(
+    urls: list[str],
+    output_dir: str,
+    download_fn: Callable[[str, str], tuple[str, int | None]],
+) -> tuple[str | None, int | None, str]:
+    """Try each URL in order. Returns ``(path, duration, used_url)``."""
+    for url in urls:
+        if not url:
+            continue
+        dl_path, duration = _download_with_retry(url, output_dir, download_fn)
+        if dl_path is not None:
+            return dl_path, duration, url
+    return None, None, ""
 
 
 def _cleanup_file(filepath: str) -> None:

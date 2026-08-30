@@ -172,6 +172,13 @@ class PendingTrack:
 
     reason: str  # "not_found", "mismatch", "ambiguous", "youtube_failed", "duration_suspect"
 
+    # Precise cause behind a coarse ``reason``. For "youtube_failed" it is one
+    # of the ``services.youtube.ERROR_*`` codes ("youtube_blocked",
+    # "youtube_not_found", …). UI routing keys off ``reason``; messages and
+    # diagnostics key off ``detail``, so telling "not on YouTube" apart from
+    # "YouTube refused to serve it" no longer requires reading the logs.
+    detail: str = ""
+
     # Original CSV request
     csv_title: str = ""
     csv_artist: str = ""

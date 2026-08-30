@@ -37,7 +37,7 @@ def _paths(tmp_path: Path) -> Paths:
 @patch(f"{_PATCH}.import_file", side_effect=RuntimeError("AppleScript failed"))
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/song.m4a", 200))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/1"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "https://yt/1"}], ""))
 def test_import_file_crash_returns_pending(
     mock_search, mock_dl, mock_tag, mock_import, tmp_path
 ) -> None:
@@ -62,7 +62,7 @@ def test_import_file_crash_returns_pending(
 @patch(f"{_PATCH}.import_file", return_value="APPLE_NEW")
 @patch(f"{_PATCH}.tag_audio_file")
 @patch(f"{_PATCH}.download_track", return_value=("/tmp/song.m4a", 200))
-@patch(f"{_PATCH}.search_by_isrc", return_value=[{"url": "https://yt/1"}])
+@patch(f"{_PATCH}.search_by_isrc_detailed", return_value=([{"url": "https://yt/1"}], ""))
 def test_import_does_not_save_to_disk(
     mock_search, mock_dl, mock_tag, mock_apple, mock_clean, mock_log, tmp_path
 ) -> None:

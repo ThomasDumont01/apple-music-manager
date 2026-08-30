@@ -1,15 +1,18 @@
 """Tests for music_manager/cli/import_cmd.py."""
 
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from music_manager.cli import dispatch, import_cmd
+from music_manager.cli.failures import load_failures, record_failures
 from music_manager.cli.lock import acquire_lock, release_lock
 from music_manager.core.config import Paths
-from music_manager.core.models import Track
+from music_manager.core.models import PendingTrack, Track
+from music_manager.services.tracks import Tracks
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -148,7 +151,15 @@ def test_run_records_unresolved_isrc_as_failed(env: Paths) -> None:
         code = import_cmd.main(["FRABC1234567"])
     assert code == import_cmd.EXIT_OK
     status = json.loads(Path(env.widget_status_path).read_text())
-    assert status["failed"] == [{"isrc": "FRABC1234567", "reason": "not_on_deezer"}]
+    assert status["failed"] == [
+        {
+            "isrc": "FRABC1234567",
+            "reason": "not_on_deezer",
+            "detail": "not_on_deezer",
+            "title": "",
+            "artist": "",
+        }
+    ]
     assert status["completed"] == []
 
 
@@ -468,6 +479,10 @@ def test_already_imported_isrc_added_to_playlist_without_pipeline(env: Paths) ->
 
     with (
         patch(
+            "music_manager.cli.import_cmd.apple_ids_exist_checked",
+            return_value=(True, {"AP_EXISTING"}),
+        ),
+        patch(
             "music_manager.cli.import_cmd.resolve_by_isrc",
         ) as mock_resolve,
         patch(
@@ -622,3 +637,303 @@ def test_partial_playlist_added_on_cancel(env: Paths) -> None:
     mock_add.assert_called_once()
     assert mock_add.call_args[0][0] == "Annulée"
     assert mock_add.call_args[0][1] == ["AP_FRABC1234567"]
+
+
+# ── Run identity (widget polling race) ─────────────────────────────────────
+
+
+def test_status_carries_run_id(env: Paths) -> None:
+    """The status file names the run it belongs to.
+
+    Regression: the widget's first poll read the *previous* run's finished
+    status, concluded the import was over and stopped polling while the
+    detached worker was still booting.
+    """
+    with (
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567", "--run-id", "abc123"])
+
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["run_id"] == "abc123"
+
+
+def test_detach_emits_run_id_on_stdout(env: Paths, capsys: pytest.CaptureFixture) -> None:
+    """--detach hands the caller the run_id it will have to match against."""
+    with patch("music_manager.cli.import_cmd.subprocess.Popen") as mock_popen:
+        code = import_cmd.main(["FRABC1234567", "--detach"])
+
+    assert code == import_cmd.EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "started"
+    assert payload["run_id"]
+    assert payload["total"] == 1
+    # The very same id must reach the worker, or the widget can never match it.
+    spawned = mock_popen.call_args[0][0]
+    assert "--run-id" in spawned
+    assert spawned[spawned.index("--run-id") + 1] == payload["run_id"]
+
+
+def test_busy_does_not_clobber_a_running_status(env: Paths) -> None:
+    """A refused second import must leave the live one's status alone.
+
+    Regression: the loser wrote {"status": "blocked"} into the very file the
+    running import was using, so the widget showed "blocked" for a healthy run.
+    """
+    Path(env.widget_status_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(env.widget_status_path).write_text(
+        json.dumps({"status": "running", "run_id": "live", "current": 3, "total": 10})
+    )
+    acquire_lock(env.widget_lock_path)
+    try:
+        code = import_cmd.main(["FRABC1234567"])
+    finally:
+        release_lock(env.widget_lock_path)
+
+    assert code == import_cmd.EXIT_BUSY
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["status"] == "running"
+    assert status["run_id"] == "live"
+
+
+def test_blocked_status_written_when_nothing_is_running(env: Paths) -> None:
+    """With no live run, the blocked state is still surfaced in the file."""
+    acquire_lock(env.ui_lock_path)
+    try:
+        code = import_cmd.main(["FRABC1234567"])
+    finally:
+        release_lock(env.ui_lock_path)
+
+    assert code == import_cmd.EXIT_USAGE
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["status"] == "blocked"
+    assert status["reason"] == "ui_running"
+
+
+# ── Failure persistence + cooldown ─────────────────────────────────────────
+
+
+def test_failures_are_persisted_with_detail(env: Paths) -> None:
+    """Failures outlive the detached worker so the widget can list and retry."""
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        return PendingTrack(reason="youtube_failed", detail="youtube_blocked", track=track)
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=lambda isrc, _albums: _track(isrc),
+        ),
+        patch("music_manager.pipeline.importer.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    stored = json.loads(Path(env.widget_failures_path).read_text())["entries"]
+    assert len(stored) == 1
+    assert stored[0]["isrc"] == "FRABC1234567"
+    assert stored[0]["detail"] == "youtube_blocked"
+    assert stored[0]["title"] == "Bad Guy"
+
+
+def test_recently_failed_isrc_is_skipped(env: Paths) -> None:
+    """A hopeless track isn't re-attempted seconds later."""
+    record_failures(
+        env.widget_failures_path,
+        [{"isrc": "FRABC1234567", "reason": "youtube_failed", "detail": "youtube_blocked"}],
+    )
+
+    with (
+        patch("music_manager.cli.import_cmd.resolve_by_isrc") as mock_resolve,
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    mock_resolve.assert_not_called()
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["skipped"][0]["reason"] == "recently_failed"
+
+
+def test_force_bypasses_the_cooldown(env: Paths) -> None:
+    """The widget's explicit retry must always actually retry."""
+    record_failures(
+        env.widget_failures_path,
+        [{"isrc": "FRABC1234567", "reason": "youtube_failed", "detail": "youtube_blocked"}],
+    )
+
+    with (
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None) as mock_resolve,
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567", "--force"])
+
+    mock_resolve.assert_called_once()
+
+
+def test_success_clears_a_previous_failure(env: Paths) -> None:
+    """Once a track finally imports, it must stop being listed as failed."""
+    record_failures(
+        env.widget_failures_path,
+        [{"isrc": "FRABC1234567", "reason": "youtube_failed", "detail": "youtube_blocked"}],
+    )
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        track.apple_id = "AP_" + track.isrc
+        return None
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=lambda isrc, _albums: _track(isrc),
+        ),
+        patch("music_manager.pipeline.importer.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567", "--force"])
+
+    assert load_failures(env.widget_failures_path) == []
+
+
+# ── Apple Music consistency ────────────────────────────────────────────────
+
+
+def test_fast_path_reimports_when_apple_id_is_dead(env: Paths) -> None:
+    """A track deleted from Apple Music must not count as already imported.
+
+    Regression: the fast path trusted tracks.json, reported a success and
+    pushed a dead persistent ID into the playlist.
+    """
+    store = Tracks(env.tracks_path)
+    store.add("DEAD_ID", {"isrc": "FRABC1234567", "apple_id": "DEAD_ID", "title": "Bad Guy"})
+    store.save()
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        track.apple_id = "FRESH_ID"
+        return None
+
+    with (
+        patch("music_manager.cli.import_cmd.apple_ids_exist_checked", return_value=(True, set())),
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=lambda isrc, _albums: _track(isrc),
+        ),
+        patch("music_manager.pipeline.importer.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["completed"] == [
+        {"isrc": "FRABC1234567", "apple_id": "FRESH_ID", "title": "Bad Guy"}
+    ]
+
+
+def test_fast_path_keeps_live_apple_id(env: Paths) -> None:
+    """A track still present in Apple Music keeps the cheap path."""
+    store = Tracks(env.tracks_path)
+    store.add("LIVE_ID", {"isrc": "FRABC1234567", "apple_id": "LIVE_ID", "title": "Bad Guy"})
+    store.save()
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.apple_ids_exist_checked",
+            return_value=(True, {"LIVE_ID"}),
+        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc") as mock_resolve,
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    mock_resolve.assert_not_called()
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["completed"][0]["apple_id"] == "LIVE_ID"
+
+
+# ── Housekeeping ───────────────────────────────────────────────────────────
+
+
+def test_worker_cleans_covers_and_pending_audio(env: Paths, tmp_path: Path) -> None:
+    """The detached worker has no UI teardown → it must clean .tmp/ itself.
+
+    Regression: 11 MB of orphan covers accumulated because cleanup_covers()
+    was only called from the Textual paths.
+    """
+    tmp_dir = Path(env.tmp_dir)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_dir / "cover_1.jpg").write_bytes(b"img")
+    leftover = tmp_dir / "audio.m4a"
+    leftover.write_bytes(b"audio")
+
+    def fake_import(track: Track, _paths, _tracks, _albums):
+        return PendingTrack(
+            reason="duration_suspect",
+            detail="duration_suspect",
+            track=track,
+            dl_path=str(leftover),
+        )
+
+    with (
+        patch(
+            "music_manager.cli.import_cmd.resolve_by_isrc",
+            side_effect=lambda isrc, _albums: _track(isrc),
+        ),
+        patch("music_manager.pipeline.importer.import_resolved_track", side_effect=fake_import),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    assert not (tmp_dir / "cover_1.jpg").exists()
+    assert not leftover.exists()
+
+
+def test_status_reports_stale_yt_dlp(env: Paths) -> None:
+    """A stale yt-dlp is surfaced so the user can act instead of guessing."""
+    with (
+        patch(
+            "music_manager.cli.import_cmd.check_yt_dlp_fresh",
+            return_value=("2026.03.17", 156, True),
+        ),
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["yt_dlp_stale"] is True
+    assert status["yt_dlp_version"] == "2026.03.17"
+
+
+def test_blocked_status_is_timestamped(env: Paths) -> None:
+    """The status file persists — the widget needs an age to stop showing it."""
+    acquire_lock(env.ui_lock_path)
+    try:
+        import_cmd.main(["FRABC1234567"])
+    finally:
+        release_lock(env.ui_lock_path)
+
+    status = json.loads(Path(env.widget_status_path).read_text())
+    assert status["at"]
+
+
+def test_timestamps_are_timezone_aware(env: Paths) -> None:
+    """Naive local timestamps were unreadable next to the UTC ones in logs."""
+    with (
+        patch("music_manager.cli.import_cmd.resolve_by_isrc", return_value=None),
+        patch("music_manager.cli.import_cmd.init_logger"),
+        patch("music_manager.cli.import_cmd.configure_resolver"),
+    ):
+        import_cmd.main(["FRABC1234567"])
+
+    status = json.loads(Path(env.widget_status_path).read_text())
+    for key in ("started_at", "finished_at"):
+        assert datetime.fromisoformat(status[key]).tzinfo is not None

@@ -1,5 +1,6 @@
 """Tests for music_manager/cli/lock.py."""
 
+import json
 import os
 from pathlib import Path
 
@@ -16,12 +17,23 @@ def lock_path(tmp_path: Path) -> str:
 # ── acquire / release ──────────────────────────────────────────────────────
 
 
+def _payload(lock_path: str) -> dict:
+    return json.loads(Path(lock_path).read_text())
+
+
 def test_acquire_release_roundtrip(lock_path: str) -> None:
     """A lock acquired by the current PID can be released by the same."""
     assert lock.acquire_lock(lock_path)
-    assert Path(lock_path).read_text() == str(os.getpid())
+    assert _payload(lock_path)["pid"] == os.getpid()
     lock.release_lock(lock_path)
     assert not Path(lock_path).exists()
+
+
+def test_acquire_records_process_start_time(lock_path: str) -> None:
+    """The holder's start time is stored so a recycled PID can be detected."""
+    assert lock.acquire_lock(lock_path)
+    assert _payload(lock_path)["started_at"]
+    lock.release_lock(lock_path)
 
 
 def test_acquire_creates_parent_directory(tmp_path: Path) -> None:
@@ -89,8 +101,59 @@ def test_acquire_reclaims_stale_lock(lock_path: str) -> None:
     Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
     Path(lock_path).write_text("0")
     assert lock.acquire_lock(lock_path)
-    assert Path(lock_path).read_text() == str(os.getpid())
+    assert _payload(lock_path)["pid"] == os.getpid()
     lock.release_lock(lock_path)
+
+
+# ── PID reuse ──────────────────────────────────────────────────────────────
+
+
+def test_recycled_pid_does_not_hold_the_lock(lock_path: str) -> None:
+    """A live PID that isn't the original holder must not keep the lock.
+
+    Regression: a .ui.lock orphaned by a killed UI sat on disk for weeks. The
+    day macOS handed its PID to an unrelated process, every widget import
+    would have been refused with "ui_running" forever.
+    """
+    Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(lock_path).write_text(
+        json.dumps({"pid": os.getpid(), "started_at": "Thu  1 Jan 00:00:00 1970"})
+    )
+    assert not lock.is_locked(lock_path)
+    assert lock.acquire_lock(lock_path)
+    lock.release_lock(lock_path)
+
+
+def test_legacy_bare_pid_lock_is_still_honoured(lock_path: str) -> None:
+    """Upgrading must not invalidate a lock held by a running instance."""
+    Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(lock_path).write_text(str(os.getpid()))
+    assert lock.is_locked(lock_path)
+
+
+# ── clear_stale_lock ───────────────────────────────────────────────────────
+
+
+def test_clear_stale_lock_removes_dead_holder(lock_path: str) -> None:
+    """A crash-orphaned lock is dropped at startup instead of lingering."""
+    Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(lock_path).write_text("0")
+    assert lock.clear_stale_lock(lock_path)
+    assert not Path(lock_path).exists()
+
+
+def test_clear_stale_lock_keeps_live_holder(lock_path: str) -> None:
+    """A genuinely held lock survives the startup sweep."""
+    lock.acquire_lock(lock_path)
+    try:
+        assert not lock.clear_stale_lock(lock_path)
+        assert Path(lock_path).exists()
+    finally:
+        lock.release_lock(lock_path)
+
+
+def test_clear_stale_lock_no_op_when_missing(lock_path: str) -> None:
+    assert not lock.clear_stale_lock(lock_path)
 
 
 # ── lock_owner_pid ─────────────────────────────────────────────────────────
