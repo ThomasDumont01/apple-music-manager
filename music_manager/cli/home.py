@@ -46,6 +46,7 @@ _DEFAULT_UBERSICHT_WIDGETS_DIR = os.path.expanduser(
 )
 _UBERSICHT_DOMAIN = "tracesOf.Uebersicht"
 
+
 def _widget_covers_dir() -> str:
     """Folder the widget reads its cached covers from.
 

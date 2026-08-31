@@ -81,6 +81,4 @@ def test_falls_back_to_the_standard_ubersicht_folder() -> None:
     """No env var and no discovery → the folder Übersicht ships with."""
     with patch.dict("os.environ", {}, clear=True):
         with patch(f"{_PATCH}._ubersicht_widget_dir", return_value=""):
-            assert home._widget_covers_dir().endswith(
-                "Übersicht/widgets/music-manager.assets"
-            )
+            assert home._widget_covers_dir().endswith("Übersicht/widgets/music-manager.assets")

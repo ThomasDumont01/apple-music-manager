@@ -51,10 +51,6 @@ export const className = `
     inset 0 1px 0 rgba(255,255,255,0.5);
   overflow: hidden;
 
-  & > div { display: flex; flex-direction: column; max-height: 85vh; }
-
-  .dashboard-drag { cursor: grab; }
-  .dashboard-drag:active { cursor: grabbing; }
 
   /* ── Animations ───────────────────────────────────── */
   @keyframes rise {
@@ -74,42 +70,10 @@ export const className = `
     to { transform: rotate(360deg); }
   }
 
-  /* ── Topbar + onglets de tête ───────────────────── */
-  .topbar {
-    flex: 0 0 auto;
-    padding: 16px 18px 12px;
-    border-bottom: 0.5px solid rgba(0,0,0,0.06);
-    background: rgba(255,255,255,0.25);
-    border-radius: 20px 20px 0 0;
-  }
-  .tabsmain {
-    display: flex; gap: 4px;
-    background: rgba(120,120,128,0.14);
-    border-radius: 11px; padding: 3px;
-  }
-  .tabmain {
-    flex: 1; text-align: center;
-    font-size: 12px; font-weight: 700;
-    padding: 7px 0;
-    border-radius: 8px;
-    color: #6e6e73;
-    cursor: pointer; user-select: none;
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
-  }
-  .tabmain:hover { color: #1c1c1e; }
-  .tabmain:active { transform: scale(0.96); }
-  .tabmain.active {
-    background: #fff;
-    color: #1c1c1e;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.04);
-  }
-  .tabico { font-size: 13px; line-height: 1; filter: grayscale(0.2); }
-
   /* ── Scroll container commun ──────────────────── */
   .scroll {
     flex: 1 1 auto; min-height: 0;
-    max-height: calc(85vh - 80px);
+    max-height: 85vh;
     overflow-y: auto;
     padding: 12px 18px 16px;
     animation: fadeIn 0.28s ease both;
@@ -376,7 +340,6 @@ export const className = `
   /* Bouton "···" en haut à droite d'une carte playlist du home — révèle la
      "Radio de cette playlist" (seed = top tracks de la playlist locale). */
   .plcell { position: relative; }
-  .plcell:hover .plmore { opacity: 1; }
 
   /* Fade-in pour les messages d'état (loader, erreur, empty) */
   .empty { animation: fadeIn 0.22s ease both; }
@@ -687,17 +650,6 @@ export const className = `
     font-size: 12px; font-weight: 600;
     animation: fadeIn 0.25s ease both;
   }
-  .mix-cell.loading { opacity: 0.6; cursor: progress; pointer-events: none; }
-  .reco-card-actions .ibtn {
-    width: 26px; height: 26px;
-    background: rgba(255,255,255,0.92);
-    color: #1c1c1e;
-    font-size: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  }
-  .reco-card-actions .ibtn.playing { background: ${ACCENT}; color: #fff; }
-  .reco-card-actions .ibtn.added { background: ${SUCCESS}; color: #fff; }
-  .reco-card-actions .ibtn.inlib { background: rgba(52,199,89,0.85); color: #fff; }
 
   /* Compactage des actions dans les lignes de recherche/récents :
      3 boutons alignés (▶ ↻ +) avec un gap serré pour ne pas étirer la row. */
@@ -710,63 +662,6 @@ export const className = `
     font-size: 12px;
   }
 `
-
-// ── Drag handle (pattern tasks.jsx, fonctionne) ─────────────────────────────
-let dragInit = false
-function findRoot() {
-  const h = document.querySelector(".dashboard-drag")
-  if (!h) return null
-  let el = h
-  while (el && el.parentElement) {
-    el = el.parentElement
-    const p = window.getComputedStyle(el).position
-    if (p === "absolute" || p === "fixed") return el
-  }
-  return null
-}
-
-// Drag éphémère : la position bouge en session via inline styles, mais n'est
-// PAS persistée. À chaque refresh du widget, la position CSS par défaut
-// (top:15px left:15px) reprend la main.
-function bindDrag() {
-  setTimeout(() => {
-    const root = findRoot()
-    const handle = document.querySelector(".dashboard-drag")
-    if (!root || !handle) return
-    if (handle.dataset.dragBound) return
-    handle.dataset.dragBound = "1"
-    dragInit = true
-    let sx, sy, sl, st, dg = false
-    const dn = (e) => {
-      // Les clics sur input/onglets/icônes ne déclenchent pas le drag.
-      if (e.target.closest("input, label, button, .tabmain, .clearbtn")) return
-      dg = true
-      const r = root.getBoundingClientRect()
-      sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top
-      root.style.left = sl + "px"; root.style.top = st + "px"
-      root.style.right = "auto"; root.style.bottom = "auto"
-      root.style.transition = "none"
-      e.preventDefault(); e.stopPropagation()
-      window.addEventListener("mousemove", mv, true)
-      window.addEventListener("mouseup", up, true)
-    }
-    const mv = (e) => {
-      if (!dg) return
-      root.style.left = Math.max(0, sl + (e.clientX - sx)) + "px"
-      root.style.top = Math.max(0, st + (e.clientY - sy)) + "px"
-      e.preventDefault()
-    }
-    const up = () => {
-      if (!dg) return
-      dg = false
-      window.removeEventListener("mousemove", mv, true)
-      window.removeEventListener("mouseup", up, true)
-      // Pas de persistance : la position est temporaire jusqu'au refresh.
-    }
-    handle.addEventListener("mousedown", dn, true)
-  }, 80)
-}
-
 
 // ── Helpers communs ────────────────────────────────────────────────────────
 function escapeShellArg(s) {
@@ -1901,19 +1796,6 @@ export const render = ({output}) => {
     (raw.split("===MUSIC_STATUS===")[1] || "").split("===MUSIC_HOME===")[0].trim() || "{}"
   const homeBlock = (raw.split("===MUSIC_HOME===")[1] || "{}").trim() || "{}"
 
-  bindDrag()
-
-  return (
-    <div>
-      <div className="topbar dashboard-drag">
-        <div className="tabsmain">
-          <span className="tabmain active">
-            <span className="tabico">\u266a</span>Musique
-          </span>
-        </div>
-      </div>
-      <MusicPanel statusBlock={statusBlock} homeBlock={homeBlock}/>
-    </div>
-  )
+  return <MusicPanel statusBlock={statusBlock} homeBlock={homeBlock}/>
 }
 

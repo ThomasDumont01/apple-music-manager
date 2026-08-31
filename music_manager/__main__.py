@@ -40,7 +40,6 @@ _CLI_COMMANDS = frozenset(
 )
 
 
-
 def _print_usage(stream: TextIO | None = None) -> None:
     """Print the top-level usage, including every CLI sub-command."""
     out = stream if stream is not None else sys.stdout

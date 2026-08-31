@@ -5,26 +5,20 @@ from unittest.mock import patch
 import pytest
 
 from music_manager.services.apple import (
-    RECO_FOLDER_NAME,
     _esc,
     add_to_playlist,
-    add_to_playlist_in_folder,
     delete_tracks,
-    ensure_folder_playlist,
     get_playlist_membership,
     get_playlist_membership_detailed,
     get_playlist_tracks,
-    get_playlist_tracks_in_folder,
     import_file,
     list_playlists,
     list_playlists_with_tracks,
-    playlist_exists_in_folder,
     rebuild_playlist,
     set_artwork,
     set_artwork_batch,
     update_track,
     update_tracks_batch,
-    user_playlist_collides_with_folder,
 )
 
 _PATCH = "music_manager.services.apple.run_applescript"
@@ -412,133 +406,3 @@ def test_get_playlist_membership_empty(mock_run) -> None:
 
 
 # ── Folder + playlist-in-folder helpers ────────────────────────────────────
-
-
-def test_reco_folder_name_constant() -> None:
-    assert RECO_FOLDER_NAME == "for me"
-
-
-@patch(_PATCH)
-def test_ensure_folder_playlist_invokes_script(mock_run) -> None:
-    ensure_folder_playlist("for me")
-    assert mock_run.called
-    script = mock_run.call_args[0][0]
-    assert "folder playlist" in script
-    assert '"for me"' in script
-    assert "make new folder playlist" in script
-
-
-@patch(_PATCH)
-def test_ensure_folder_playlist_empty_name_noop(mock_run) -> None:
-    ensure_folder_playlist("")
-    mock_run.assert_not_called()
-
-
-@patch(_PATCH)
-def test_playlist_exists_in_folder_true(mock_run) -> None:
-    mock_run.return_value = "true"
-    assert playlist_exists_in_folder("for me", "library") is True
-
-
-@patch(_PATCH)
-def test_playlist_exists_in_folder_false(mock_run) -> None:
-    mock_run.return_value = "false"
-    assert playlist_exists_in_folder("for me", "library") is False
-
-
-@patch(_PATCH, return_value=None)
-def test_playlist_exists_in_folder_none(mock_run) -> None:
-    assert playlist_exists_in_folder("for me", "library") is False
-
-
-def test_playlist_exists_in_folder_empty_args() -> None:
-    assert playlist_exists_in_folder("", "library") is False
-    assert playlist_exists_in_folder("for me", "") is False
-
-
-@patch(_PATCH)
-def test_get_playlist_tracks_in_folder_returns_ids(mock_run) -> None:
-    mock_run.return_value = "T1\nT2\nT3\n"
-    assert get_playlist_tracks_in_folder("for me", "library") == ["T1", "T2", "T3"]
-
-
-@patch(_PATCH, return_value=None)
-def test_get_playlist_tracks_in_folder_empty(mock_run) -> None:
-    assert get_playlist_tracks_in_folder("for me", "library") == []
-
-
-def test_get_playlist_tracks_in_folder_empty_args() -> None:
-    assert get_playlist_tracks_in_folder("", "library") == []
-    assert get_playlist_tracks_in_folder("for me", "") == []
-
-
-@patch(_PATCH)
-def test_add_to_playlist_in_folder_emits_script(mock_run) -> None:
-    mock_run.return_value = "2"
-    count = add_to_playlist_in_folder("for me", "library", ["AP1", "AP2"])
-    assert count == 2
-    script = mock_run.call_args[0][0]
-    assert '"for me"' in script
-    assert '"library"' in script
-    assert '"AP1"' in script
-    assert '"AP2"' in script
-    assert "make new folder playlist" in script
-    assert "make new user playlist" in script
-    # Use ``move`` (the documented verb) rather than ``set parent of`` so the
-    # playlist actually lands inside the folder on recent Music.app.
-    assert "move p to folderRef" in script
-    # A same-named user playlist at the root (the user's original) MUST stay
-    # untouched — the recommendation flow creates a sibling inside ``for me/``
-    # rather than moving the original. Guards against regression of the bug
-    # where the original playlist got moved + its tracks rewritten.
-    assert "pOrphan" not in script
-    assert "move pOrphan" not in script
-
-
-@patch(_PATCH)
-def test_add_to_playlist_in_folder_accepts_single_id(mock_run) -> None:
-    mock_run.return_value = "1"
-    count = add_to_playlist_in_folder("for me", "library", "AP1")
-    assert count == 1
-
-
-@patch(_PATCH)
-def test_add_to_playlist_in_folder_empty_inputs_noop(mock_run) -> None:
-    assert add_to_playlist_in_folder("", "library", ["AP1"]) == 0
-    assert add_to_playlist_in_folder("for me", "", ["AP1"]) == 0
-    assert add_to_playlist_in_folder("for me", "library", []) == 0
-    mock_run.assert_not_called()
-
-
-@patch(_PATCH, return_value=None)
-def test_add_to_playlist_in_folder_script_failure_returns_zero(mock_run) -> None:
-    assert add_to_playlist_in_folder("for me", "library", ["AP1"]) == 0
-
-
-@patch(_PATCH)
-def test_add_to_playlist_in_folder_non_numeric_returns_zero(mock_run) -> None:
-    mock_run.return_value = "garbage"
-    assert add_to_playlist_in_folder("for me", "library", ["AP1"]) == 0
-
-
-# ── user_playlist_collides_with_folder ─────────────────────────────────────
-
-
-@patch(_PATCH, return_value="true")
-def test_collision_detected_when_script_returns_true(mock_run) -> None:
-    assert user_playlist_collides_with_folder("for me") is True
-
-
-@patch(_PATCH, return_value="false")
-def test_collision_negative_when_script_returns_false(mock_run) -> None:
-    assert user_playlist_collides_with_folder("for me") is False
-
-
-@patch(_PATCH, side_effect=RuntimeError("AppleScript blocked"))
-def test_collision_defensive_on_script_failure(mock_run) -> None:
-    """A failing AppleScript must not crash the caller — return False."""
-    assert user_playlist_collides_with_folder("for me") is False
-
-
-def test_collision_empty_name_returns_false() -> None:
-    assert user_playlist_collides_with_folder("") is False

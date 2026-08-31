@@ -68,8 +68,9 @@ music-manager
 ## Widget bureau (optionnel)
 
 Un widget [Ubersicht](https://tracesof.net/uebersicht/) pose Music Manager
-directement sur le bureau : recherche Deezer, apercu et import de playlists,
-suivi d'import en direct et lecture Apple Music.
+directement sur le bureau : recherche Deezer (morceaux et playlists), apercu
+et import, depot de CSV Exportify, suivi d'import en direct et lecture
+Apple Music.
 
 Le widget pilote l'application installee — il ne duplique aucune logique.
 
@@ -93,7 +94,7 @@ modifie a la main est sauvegarde en `.jsx.bak` avant remplacement.
 
 Le widget et son cache de pochettes sont copies dans le dossier de widgets
 declare par Ubersicht (par defaut
-`~/Library/Application Support/Ubersicht/widgets/`). Pour forcer un autre
+`~/Library/Application Support/Übersicht/widgets/`). Pour forcer un autre
 emplacement, definir `MUSIC_MANAGER_WIDGET_ASSETS_DIR`.
 
 ## Premier lancement

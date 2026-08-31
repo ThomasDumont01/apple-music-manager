@@ -220,11 +220,6 @@ def set_use_cookies(value: bool) -> None:
     _cookies_decided = value
 
 
-def get_use_cookies() -> bool:
-    """Return whether Safari cookies are currently active."""
-    return _use_cookies
-
-
 def check_safari_youtube_login() -> bool:
     """Check if Safari has YouTube auth cookies (heuristic, local file read)."""
     try:

@@ -580,43 +580,15 @@ def _pick_best_cover(deezer_url: str, itunes_url: str) -> str:
     return itunes_url
 
 
-def fetch_album_preview(album_id: int, albums_store: Albums) -> dict:
-    """Album data for a *preview* — Deezer only, no iTunes cover search.
-
-    Recommendation cards need a thumbnail and the ranking signals (genre,
-    release date), not the 3000x3000 artwork that only matters once a track
-    is actually imported. Skipping iTunes here is what keeps a feed build
-    from firing a few hundred cover searches and getting rate-limited.
-
-    The result is cached but flagged ``cover_hd: False``. albums.json feeds
-    the import path, so an unflagged Deezer-only cover would silently
-    downgrade the artwork of every track later imported from that album —
-    ``fetch_album_with_cover`` treats a flagged entry as a miss and upgrades
-    it. Without caching at all, every feed rebuild would re-fetch every
-    album and spend its whole rate-limit budget on artwork.
-    """
-    if not album_id:
-        return {}
-    cached = albums_store.get(album_id)
-    if cached:
-        return cached
-
-    album_data = deezer_get(f"/album/{album_id}")
-    if not album_data or "error" in album_data:
-        return {}
-    result = _album_fields(album_id, album_data)
-    result["cover_hd"] = False
-    albums_store.put(album_id, result)
-    return result
-
-
 def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
     """Fetch album data from Deezer + best cover from iTunes. Cache in albums_store."""
     if not album_id:
         return {}
     cached = albums_store.get(album_id)
-    # Entries predating the flag came from this very function, so a missing
-    # key means HD. Only an explicit False is a preview to be upgraded.
+    # v1.4.0 cached Deezer-only covers under `cover_hd: False` for the
+    # recommendation cards. That feature is gone, but those degraded entries
+    # are still on disk and must be upgraded on first use instead of being
+    # served as-is. A missing key predates the flag and means HD.
     if cached and cached.get("cover_hd", True):
         return cached
 
@@ -644,7 +616,6 @@ def fetch_album_with_cover(album_id: int, albums_store: Albums) -> dict:
 
     albums_store.put(album_id, result)
     return result
-
 
 
 def _album_fields(album_id: int, album_data: dict) -> dict:
@@ -869,15 +840,6 @@ def resolve_by_id(deezer_id: int, albums_store: Albums) -> Track | None:
     album_id = data.get("album", {}).get("id", 0)
     album_data = fetch_album_with_cover(album_id, albums_store)
     return build_track(data, album_data)
-
-
-def search_track(title: str, artist: str) -> list[dict]:
-    """Search Deezer for a single track. Returns the filtered list (may be empty).
-
-    Public wrapper around the internal `_search_deezer` so external pipelines
-    (recommendations, etc.) don't reach into private symbols.
-    """
-    return _search_deezer(title, artist)
 
 
 def resolve_by_isrc(isrc: str, albums_store: Albums) -> Track | None:

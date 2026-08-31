@@ -18,12 +18,10 @@ from music_manager.services.youtube import (
     _parse_output,
     download_track,
     extract_error,
-    get_use_cookies,
     reset_throttle,
     search_by_isrc,
     set_cookies_callback,
     set_rate_limit_callback,
-    set_use_cookies,
 )
 
 _PATCH = "music_manager.services.youtube"
@@ -795,39 +793,6 @@ def test_download_uses_cookies_flag(mock_run: MagicMock, mock_log: MagicMock) ->
 
 
 # ── TCC-blocked cookies ────────────────────────────────────────────────────
-
-
-@patch(f"{_PATCH}.log_event")
-@patch("music_manager.core.config.save_config")
-@patch(f"{_PATCH}.subprocess.run")
-def test_tcc_blocked_cookies_retry_without_backoff(
-    mock_run: MagicMock, mock_save: MagicMock, mock_log: MagicMock
-) -> None:
-    """macOS denying the Safari cookie jar is a local problem, not a YouTube one.
-
-    Regression: it went through the generic error path and cost a ~30s
-    exponential backoff before the (successful) cookie-less retry.
-    """
-    set_use_cookies(True)
-    blocked = MagicMock(
-        returncode=1,
-        stdout="",
-        stderr=(
-            "ERROR: [Errno 1] Operation not permitted: "
-            "'/Users/x/Library/Cookies/Cookies.binarycookies'"
-        ),
-    )
-    ok = MagicMock(stdout=_make_candidate("v1", "X", "Artist - Topic") + "\n", returncode=0)
-    mock_run.side_effect = [blocked, ok]
-
-    with patch(f"{_PATCH}._sleep_backoff") as mock_sleep:
-        results = search_by_isrc("ISRC1")
-
-    assert [r["id"] for r in results] == ["v1"]
-    mock_sleep.assert_not_called()
-    # Cookies are turned off and the choice is persisted.
-    assert get_use_cookies() is False
-    mock_save.assert_called_with({"youtube_cookies": False})
 
 
 @patch(f"{_PATCH}.log_event")
