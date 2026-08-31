@@ -75,7 +75,9 @@ export const className = `
     flex: 1 1 auto; min-height: 0;
     max-height: 85vh;
     overflow-y: auto;
-    padding: 12px 18px 16px;
+    /* Gouttière uniforme : le 18px latéral était déjà la référence,
+       le haut (12) et le bas (16) ne s'y accordaient pas. */
+    padding: 18px;
     animation: fadeIn 0.28s ease both;
   }
   .scroll::-webkit-scrollbar { width: 6px; }
