@@ -1,7 +1,7 @@
 // music-manager.jsx — widget Übersicht pour Music Manager
 //
-// Recherche Deezer, aperçu et import de playlists, suivi d'import en direct,
-// lecture Apple Music et recommandations « Pour toi ».
+// Recherche Deezer (morceaux et playlists), aperçu et import, dépôt de CSV
+// Exportify, suivi d'import en direct et lecture Apple Music.
 //
 // Prérequis : l'app installée via le DMG (binaire ~/.local/bin/music-manager).
 // Installation : déposer ce fichier dans
@@ -371,29 +371,10 @@ export const className = `
   /* Bouton "···" en haut à droite d'une carte playlist du home — révèle la
      "Radio de cette playlist" (seed = top tracks de la playlist locale). */
   .plcell { position: relative; }
-  .plmore {
-    position: absolute;
-    top: 4px; right: 4px;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.92);
-    color: #1c1c1e;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 800;
-    line-height: 1;
-    cursor: pointer; user-select: none;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-    opacity: 0;
-    transition: opacity 0.15s ease, background 0.15s, transform 0.1s;
-    z-index: 3;
-  }
   .plcell:hover .plmore { opacity: 1; }
-  .plmore:hover { background: ${ACCENT}; color: #fff; }
-  .plmore:active { transform: scale(0.92); }
 
   /* Fade-in pour les messages d'état (loader, erreur, empty) */
   .empty { animation: fadeIn 0.22s ease both; }
-  .expoempty { animation: fadeIn 0.22s ease both; }
 
   /* Transitions plus douces sur les éléments interactifs */
   .modepill { transition: background 0.18s, color 0.18s, transform 0.1s; }
@@ -701,176 +682,7 @@ export const className = `
     font-size: 12px; font-weight: 600;
     animation: fadeIn 0.25s ease both;
   }
-
-  /* ── "Pour toi" — grille de mix (dimensions fixes pour uniformité) ── */
-  .mix-group { margin-bottom: 22px; animation: fadeIn 0.3s ease both; }
-  .mix-group-head {
-    font-size: 12px; font-weight: 800;
-    color: #1c1c1e;
-    letter-spacing: -0.01em;
-    margin: 0 0 10px;
-  }
-  /* Dimensions fixes par cellule — évite qu'un caption long n'étire la
-     colonne et donc n'agrandisse la cover en face. Le widget fait 340px
-     de large ; avec 18px de padding × 2 + 12px de gap → deux colonnes
-     de ~137px conviennent, on prend 140px pour un peu d'air. */
-  .mix-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 140px);
-    justify-content: space-between;
-    gap: 14px 10px;
-  }
-  .mix-cell {
-    width: 140px;
-    cursor: pointer; user-select: none;
-    transition: transform 0.15s ease;
-  }
-  .mix-cell:hover { transform: translateY(-2px); }
-  .mix-cell:active { transform: scale(0.98); }
   .mix-cell.loading { opacity: 0.6; cursor: progress; pointer-events: none; }
-  .mix-cover {
-    position: relative;
-    width: 140px; height: 140px;
-    border-radius: 10px;
-    background-size: cover; background-position: center;
-    background-color: rgba(0,0,0,0.06);
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  }
-  .mix-fallback {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 34px; color: rgba(0,0,0,0.25);
-  }
-  .mix-label {
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    bottom: 6px;
-    padding: 3px 8px;
-    font-size: 10.5px; font-weight: 800;
-    color: #0d0d0d;
-    letter-spacing: -0.01em;
-    border-radius: 4px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-    text-align: left;
-  }
-  .mix-loading {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.5);
-    color: #fff; font-weight: 700; font-size: 11px;
-  }
-  .mix-caption {
-    font-size: 11.5px; font-weight: 700;
-    color: #1c1c1e;
-    margin-top: 6px;
-    line-height: 1.25;
-    max-width: 140px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .mix-sub {
-    font-size: 10px; color: #8a8a8e;
-    margin-top: 2px;
-    max-width: 140px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-
-  .reco-refresh {
-    display: flex; justify-content: space-between; align-items: center;
-    margin: 2px 0 10px;
-    font-size: 10.5px; color: #6e6e73;
-  }
-  .reco-refresh .refreshbtn {
-    padding: 4px 10px;
-    border-radius: 8px;
-    background: rgba(120,120,128,0.14);
-    font-weight: 700;
-    cursor: pointer; user-select: none;
-    color: #1c1c1e;
-    transition: background 0.15s, transform 0.1s;
-  }
-  .reco-refresh .refreshbtn:hover { background: rgba(120,120,128,0.24); }
-  .reco-refresh .refreshbtn:active { transform: scale(0.95); }
-  .reco-refresh .refreshbtn.spinning { pointer-events: none; opacity: 0.6; }
-  .reco-section { margin-bottom: 18px; animation: fadeIn 0.3s ease both; }
-  .reco-section-head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 8px;
-  }
-  .reco-section-title {
-    font-size: 13px; font-weight: 800; color: #1c1c1e;
-    letter-spacing: -0.01em;
-  }
-  .reco-section-sub {
-    font-size: 10.5px; color: #8a8a8e;
-    margin-left: 10px;
-    flex: 1; text-align: right;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .reco-subcard { margin-bottom: 14px; }
-  .reco-subcard-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 4px 0 6px;
-    gap: 8px;
-  }
-  .reco-subcard-title {
-    font-size: 11.5px; font-weight: 700; color: #3a3a3c;
-    flex: 1; min-width: 0;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .reco-subcard-sub {
-    font-size: 10px; color: #8a8a8e;
-    margin-left: 6px;
-  }
-  .reco-radio-btn {
-    flex: 0 0 auto;
-    font-size: 10px; font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 8px;
-    background: rgba(0,122,255,0.1);
-    color: ${ACCENT};
-    cursor: pointer; user-select: none;
-    transition: background 0.15s, transform 0.1s;
-  }
-  .reco-radio-btn:hover { background: rgba(0,122,255,0.2); }
-  .reco-radio-btn:active { transform: scale(0.95); }
-  .reco-scroll {
-    display: flex; gap: 10px;
-    overflow-x: auto; overflow-y: hidden;
-    padding: 2px 2px 8px;
-    scroll-snap-type: x proximity;
-  }
-  .reco-scroll::-webkit-scrollbar { height: 5px; }
-  .reco-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.22); border-radius: 3px; }
-  .reco-scroll::-webkit-scrollbar-track { background: transparent; }
-  .reco-card {
-    flex: 0 0 auto;
-    width: 118px;
-    scroll-snap-align: start;
-    display: flex; flex-direction: column;
-    animation: rise 0.35s ease both;
-  }
-  .reco-card-cover {
-    position: relative;
-    width: 118px; height: 118px;
-    border-radius: 10px;
-    background-size: cover; background-position: center;
-    background-color: rgba(0,0,0,0.06);
-    overflow: hidden;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.15);
-  }
-  .reco-card-actions {
-    position: absolute; inset: 0;
-    display: flex; gap: 6px;
-    align-items: flex-end; justify-content: flex-end;
-    padding: 6px;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55));
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-  .reco-card:hover .reco-card-actions { opacity: 1; }
   .reco-card-actions .ibtn {
     width: 26px; height: 26px;
     background: rgba(255,255,255,0.92);
@@ -881,36 +693,6 @@ export const className = `
   .reco-card-actions .ibtn.playing { background: ${ACCENT}; color: #fff; }
   .reco-card-actions .ibtn.added { background: ${SUCCESS}; color: #fff; }
   .reco-card-actions .ibtn.inlib { background: rgba(52,199,89,0.85); color: #fff; }
-  .reco-card-title {
-    font-size: 11px; font-weight: 600; color: #1c1c1e;
-    margin-top: 6px;
-    line-height: 1.25;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .reco-card-artist {
-    font-size: 10px; color: #8a8a8e;
-    margin-top: 2px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .reco-empty {
-    font-size: 11.5px; color: #8a8a8e; font-style: italic;
-    padding: 14px 6px;
-  }
-  /* Bouton ↻ radio des lignes de recherche + récents — plus discret que le
-     ▶ / + primaires. */
-  .reco-radio-inline {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: rgba(120,120,128,0.14);
-    color: #1c1c1e;
-    font-size: 11px;
-    cursor: pointer; user-select: none;
-    transition: background 0.15s, transform 0.1s, color 0.15s;
-  }
-  .reco-radio-inline:hover { background: rgba(0,122,255,0.15); color: ${ACCENT}; }
-  .reco-radio-inline:active { transform: scale(0.9); }
 
   /* Compactage des actions dans les lignes de recherche/récents :
      3 boutons alignés (▶ ↻ +) avec un gap serré pour ne pas étirer la row. */
@@ -1171,7 +953,6 @@ function PlaylistPreview({
   preview, playing, togglePlay, isStacked, toggleStack,
   playInAppleMusic, stack, onImportAll, onImportSelection, onCancel,
   importTargetMode, setImportTargetMode, playPlaylist,
-  onTrackRadio, openingRadio,
 }) {
   const n = preview.tracks.length
   const skipped = preview.skipped || 0
@@ -1258,13 +1039,6 @@ function PlaylistPreview({
                   {playing === t.isrc ? "❚❚" : "▶"}
                 </span>
               )}
-              {onTrackRadio && (t.isrc || t.deezer_id) && (
-                <span
-                  className="reco-radio-inline"
-                  onClick={() => onTrackRadio(t)}
-                  title="Radio de ce titre"
-                >{openingRadio === (t.isrc || ("d:" + t.deezer_id)) ? "…" : "↻"}</span>
-              )}
               {t.in_library ? (
                 <span
                   className="ibtn inlib"
@@ -1315,98 +1089,6 @@ function PlaylistPreview({
   )
 }
 
-// ── "Pour toi" — grille de mix à la Spotify Home ──────────────────────────
-// Chaque case = un mix (artiste, genre, décennie, mood, radio d'un titre récent).
-// Clic → PlaylistPreview via `recos-mix-tracks`. Le landing ne résout AUCUN
-// titre, donc s'affiche en < 1s au lieu d'attendre 60s de blend Deezer.
-function RecosMixes({
-  mixes, loading, error, onRefresh, onOpenMix, openingMix,
-}) {
-  const groups = mixes && Array.isArray(mixes.groups) ? mixes.groups : []
-  const isEmpty = !loading && !error && groups.length === 0
-  return (
-    <div>
-      <div className="reco-refresh">
-        <span>
-          {loading
-            ? "Chargement…"
-            : mixes && mixes.cache_hit
-              ? "Cache (mise à jour à chaque import)"
-              : mixes && mixes.generated_at
-                ? `Généré ${mixes.generated_at.slice(11, 16)}`
-                : ""}
-        </span>
-        <span
-          className={"refreshbtn " + (loading ? "spinning" : "")}
-          onClick={onRefresh}
-          title="Régénérer les mix maintenant"
-        >{loading ? "…" : "↻ Actualiser"}</span>
-      </div>
-
-      {error && <div className="empty" style={{color: DANGER, fontWeight: 600}}>{error}</div>}
-      {loading && groups.length === 0 && (
-        <div className="empty"><span className="loader"/>Chargement des mix…</div>
-      )}
-      {isEmpty && (
-        <div className="empty">
-          Aucun mix pour l'instant.<br/>Importe quelques titres puis reviens ici.
-        </div>
-      )}
-
-      {groups.map(group => (
-        <div className="mix-group" key={group.id}>
-          <div className="mix-group-head">{group.title}</div>
-          <div className="mix-grid">
-            {(group.cards || []).map(card => (
-              <MixCard
-                key={card.kind + ":" + card.value}
-                card={card}
-                onOpen={() => onOpenMix(card)}
-                busy={openingMix === card.kind + ":" + card.value}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-const MIX_LABEL_COLORS = [
-  "#f7b3c2", "#d0ff5b", "#8ec7ff", "#f4a462",
-  "#c5a3ff", "#7de3a5", "#ffb686", "#ff8ea3",
-]
-function mixLabelColor(seed) {
-  let h = 0
-  const s = String(seed || "")
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return MIX_LABEL_COLORS[Math.abs(h) % MIX_LABEL_COLORS.length]
-}
-
-function MixCard({card, onOpen, busy}) {
-  const cover = card.cover_url || ""
-  const label = card.title.startsWith("Mix ") ? card.title.slice(4) : card.title
-  const color = mixLabelColor(card.kind + ":" + card.value)
-  return (
-    <div
-      className={"mix-cell " + (busy ? "loading" : "")}
-      onClick={onOpen}
-      title={card.title}
-    >
-      <div
-        className="mix-cover"
-        style={{backgroundImage: cover ? `url("${cover}")` : "none"}}
-      >
-        {!cover && <div className="mix-fallback">♫</div>}
-        <div className="mix-label" style={{background: color}}>{label}</div>
-        {busy && <div className="mix-loading">Chargement…</div>}
-      </div>
-      <div className="mix-caption">{card.title}</div>
-      {card.subtitle && <div className="mix-sub">{card.subtitle}</div>}
-    </div>
-  )
-}
-
 function MusicPanel({statusBlock, homeBlock}) {
   let initialStatus = null
   try { initialStatus = JSON.parse(statusBlock) } catch (e) { initialStatus = null }
@@ -1416,19 +1098,14 @@ function MusicPanel({statusBlock, homeBlock}) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState([])
   // 'tracks' (morceaux Deezer) | 'playlists' (playlists Deezer) |
-  // 'recos' (Spotify-Home feed) | 'exportify' (CSV drop) | 'spotify' (compte)
+  // 'exportify' (dépôt de CSV)
   const [mode, setMode] = useState("tracks")
   // "Pour toi" : landing = grille de mix (artistes / genres / décennies /
   // moods / récents). Le fetch initial ne résout AUCUN morceau, juste des
   // covers, donc s'affiche en < 1s. Cache disque 6h côté Python.
-  const [recosMixes, setRecosMixes] = useState(null)
-  const [recosLoading, setRecosLoading] = useState(false)
-  const [recosError, setRecosError] = useState("")
   // Ref du mix en cours de résolution (clic sur une case) — sert à
   // afficher l'indicateur "Chargement…" sur la carte cliquée.
-  const [openingMix, setOpeningMix] = useState("")
   // ISRC / deezer_id en cours de résolution "Radio de ce titre".
-  const [openingRadio, setOpeningRadio] = useState("")
   const [playlistResults, setPlaylistResults] = useState([])
   // deezer_id de la playlist dont on est en train de résoudre les tracks (clic en cours)
   const [resolvingId, setResolvingId] = useState(0)
@@ -1520,14 +1197,6 @@ function MusicPanel({statusBlock, homeBlock}) {
     }, 1500)
     return () => clearInterval(id)
   }, [status && status.status])
-
-  // Fetch de la grille de mix à l'entrée en mode recos. Cache disque
-  // côté Python : ré-entrer dans l'onglet ne relance pas la génération.
-  useEffect(() => {
-    if (mode !== "recos") return
-    if (recosMixes || recosLoading) return
-    loadRecosMixes(false)
-  }, [mode])
 
   useEffect(() => {
     if (mode === "exportify") {
@@ -1699,154 +1368,6 @@ function MusicPanel({statusBlock, homeBlock}) {
     // Le polling import-status (toutes les 1.5s) verra le status "cancelled"
     // une fois le worker arrivé à un point de check. On laisse le bouton en
     // état "désactivé" jusqu'à ce que le status soit plus en "running".
-  }
-
-  async function loadRecosMixes(forceRefresh) {
-    setRecosLoading(true)
-    setRecosError("")
-    try {
-      const flag = forceRefresh ? " --force-refresh" : ""
-      const out = await run(`${MM_RUN} recos-mixes${flag} 2>/dev/null`)
-      const parsed = JSON.parse((out || "").trim() || "{}")
-      if (parsed && parsed.error) {
-        setRecosError("Erreur : " + parsed.error)
-        setRecosMixes(null)
-        return
-      }
-      setRecosMixes(parsed)
-    } catch (e) {
-      setRecosError("Échec : " + String(e).slice(0, 100))
-      setRecosMixes(null)
-    } finally {
-      setRecosLoading(false)
-    }
-  }
-
-  async function openMix(card) {
-    if (!card || !card.kind || !card.value) return
-    const ref = card.kind + ":" + card.value
-    if (openingMix) return
-    setOpeningMix(ref)
-    setErrorMsg("")
-    try {
-      const out = await run(
-        `${MM_RUN} recos-mix-tracks ${escapeShellArg(card.kind)} ${escapeShellArg(card.value)} 2>/dev/null`
-      )
-      const parsed = JSON.parse((out || "").trim() || "{}")
-      if (parsed && parsed.error) {
-        setErrorMsg("Erreur : " + parsed.error)
-        return
-      }
-      const list = Array.isArray(parsed.tracks) ? parsed.tracks : []
-      if (list.length === 0) {
-        setErrorMsg("Aucune suggestion pour ce mix.")
-        return
-      }
-      setPreviewPlaylist({
-        name: parsed.name || card.title,
-        creator: parsed.creator || card.subtitle || "",
-        nb_tracks: list.length,
-        tracks: list,
-        skipped: 0,
-        cover_url: parsed.cover_url || card.cover_url || "",
-        cover_thumb: parsed.cover_thumb || card.cover_url || "",
-        // Pas readOnly : la barre d'import doit s'afficher pour permettre
-        // de télécharger tout le mix ou juste la sélection dans Apple Music.
-      })
-    } catch (e) {
-      setErrorMsg("Échec : " + String(e).slice(0, 80))
-    } finally {
-      setOpeningMix("")
-    }
-  }
-
-  // Radio d'un morceau — marche pour les titres de la biblio (via ISRC) et
-  // pour n'importe quel résultat de recherche Deezer (via deezer_id).
-  async function openTrackRadio(track) {
-    if (!track) return
-    const key = track.isrc || ("d:" + (track.deezer_id || ""))
-    if (openingRadio || (!track.isrc && !track.deezer_id)) return
-    setOpeningRadio(key)
-    setErrorMsg("")
-    try {
-      const args = [
-        track.isrc ? escapeShellArg(track.isrc) : "''",
-        track.deezer_id ? `--deezer-id ${track.deezer_id}` : "",
-        track.title ? `--title ${escapeShellArg(track.title)}` : "",
-        track.artist ? `--artist ${escapeShellArg(track.artist)}` : "",
-        track.cover_url ? `--cover-url ${escapeShellArg(track.cover_url)}` : "",
-      ].filter(Boolean).join(" ")
-      const out = await run(`${MM_RUN} recos-track-radio ${args} 2>/dev/null`)
-      const parsed = JSON.parse((out || "").trim() || "{}")
-      if (parsed && parsed.error) {
-        setErrorMsg("Erreur : " + parsed.error)
-        return
-      }
-      const list = Array.isArray(parsed.tracks) ? parsed.tracks : []
-      if (list.length === 0) {
-        setErrorMsg("Aucune suggestion pour ce titre.")
-        return
-      }
-      setPreviewPlaylist({
-        name: parsed.name || `Radio de ${track.title || ""}`,
-        creator: parsed.creator || track.artist || "",
-        nb_tracks: list.length,
-        tracks: list,
-        skipped: 0,
-        cover_url: parsed.cover_url || trackCoverUrl(track),
-        cover_thumb: parsed.cover_thumb || trackCoverUrl(track),
-        // Pas readOnly : on veut la barre d'import pour télécharger la radio.
-      })
-    } catch (e) {
-      setErrorMsg("Échec : " + String(e).slice(0, 80))
-    } finally {
-      setOpeningRadio("")
-    }
-  }
-
-  async function openPlaylistRadio(p) {
-    if (!p || !p.name) return
-    const key = "pl:" + p.name
-    if (openingRadio) return
-    setOpeningRadio(key)
-    setErrorMsg("")
-    try {
-      const nameArg = escapeShellArg(p.name)
-      const pidArg = p.persistent_id
-        ? ` --persistent-id ${escapeShellArg(p.persistent_id)}`
-        : ""
-      const out = await run(
-        `${MM_RUN} recos-playlist-radio ${nameArg}${pidArg} 2>/dev/null`
-      )
-      const parsed = JSON.parse((out || "").trim() || "{}")
-      if (parsed && parsed.error) {
-        setErrorMsg("Erreur : " + parsed.error)
-        return
-      }
-      const list = Array.isArray(parsed.tracks) ? parsed.tracks : []
-      if (list.length === 0) {
-        setErrorMsg("Aucune suggestion pour cette playlist.")
-        return
-      }
-      const coverThumb = p.cover_filename
-        ? `music-manager.assets/${p.cover_filename}`
-        : (parsed.cover_thumb || "")
-      setPreviewPlaylist({
-        name: parsed.name || `Radio ${p.name}`,
-        creator: parsed.creator || "",
-        nb_tracks: list.length,
-        tracks: list,
-        skipped: 0,
-        cover_url: parsed.cover_url || coverThumb,
-        cover_thumb: coverThumb,
-        // Pas readOnly : on veut la barre d'import pour ajouter les
-        // suggestions à la playlist locale correspondante.
-      })
-    } catch (e) {
-      setErrorMsg("Échec : " + String(e).slice(0, 80))
-    } finally {
-      setOpeningRadio("")
-    }
   }
 
   async function pickHomePlaylist(p, uid) {
@@ -2086,7 +1607,7 @@ function MusicPanel({statusBlock, homeBlock}) {
   // L'import tourne en arrière-plan : on garde la home accessible pendant
   // qu'il s'exécute. Seules les conditions "query active" et "exportify mode"
   // masquent la home. La barre de progression s'affiche en bas, sticky.
-  const showHome = !query && !blocked && !justDone && home && mode !== "exportify" && mode !== "recos"
+  const showHome = !query && !blocked && !justDone && home && mode !== "exportify"
   // Une fois que le status passe à autre chose que "running", on reset le flag
   // local "cancellingImport" pour permettre un futur annulation.
   useEffect(() => {
@@ -2118,8 +1639,6 @@ function MusicPanel({statusBlock, homeBlock}) {
           importTargetMode={importTargetMode}
           setImportTargetMode={setImportTargetMode}
           playPlaylist={playPlaylist}
-          onTrackRadio={openTrackRadio}
-          openingRadio={openingRadio}
         />
       </div>
     )
@@ -2128,7 +1647,7 @@ function MusicPanel({statusBlock, homeBlock}) {
   return (
     <div className="scroll">
       <audio ref={audioRef} onEnded={() => setPlaying(null)}/>
-      {mode !== "spotify" && mode !== "recos" && (
+      {mode !== "spotify" && (
         <div className="searchbox">
           <svg className="ico" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>
@@ -2143,10 +1662,6 @@ function MusicPanel({statusBlock, homeBlock}) {
       )}
 
       <div className="modepills">
-        <div
-          className={"modepill " + (mode === "recos" ? "active" : "")}
-          onClick={() => setMode("recos")}
-        >Pour toi</div>
         <div
           className={"modepill " + (mode === "tracks" ? "active" : "")}
           onClick={() => setMode("tracks")}
@@ -2186,13 +1701,6 @@ function MusicPanel({statusBlock, homeBlock}) {
             <span className={"ibtn " + (playing === r.isrc ? "playing" : "")} onClick={() => togglePlay(r)} title="Aperçu 30s">
               {playing === r.isrc ? "❚❚" : "▶"}
             </span>
-            {(r.isrc || r.deezer_id) && (
-              <span
-                className="reco-radio-inline"
-                onClick={() => openTrackRadio(r)}
-                title="Radio de ce titre"
-              >{openingRadio === (r.isrc || ("d:" + r.deezer_id)) ? "…" : "↻"}</span>
-            )}
             {r.in_library ? (
               <span className="ibtn inlib" onClick={() => playInAppleMusic(r)} title="Lire dans Apple Music">♪</span>
             ) : (
@@ -2203,17 +1711,6 @@ function MusicPanel({statusBlock, homeBlock}) {
           </div>
         </div>
       ))}</div>}
-
-      {mode === "recos" && (
-        <RecosMixes
-          mixes={recosMixes}
-          loading={recosLoading}
-          error={recosError}
-          onRefresh={() => loadRecosMixes(true)}
-          onOpenMix={openMix}
-          openingMix={openingMix}
-        />
-      )}
 
       {mode === "playlists" && playlistResults.length > 0 && (
         <div className="plgrid-search anim">
@@ -2279,7 +1776,7 @@ function MusicPanel({statusBlock, homeBlock}) {
         </div>
       )}
 
-      {((mode === "tracks" && query) || mode === "recos") && stack.length > 0 && !importing && (
+      {mode === "tracks" && query && stack.length > 0 && !importing && (
         <div className="importbtn" onClick={doImport}>Importer {stack.length} morceau{stack.length > 1 ? "x" : ""}</div>
       )}
 
@@ -2314,7 +1811,6 @@ function MusicPanel({statusBlock, homeBlock}) {
                         ? `music-manager.assets/${p.cover_filename}`
                         : ""
                       const mosaic = playlistMosaicUrls(p)
-                      const isOpeningRadio = openingRadio === "pl:" + p.name
                       return (
                         <div
                           className={"plcell " + (resolvingHomePlaylist === uid ? "loading" : "")}
@@ -2327,14 +1823,6 @@ function MusicPanel({statusBlock, homeBlock}) {
                             imageUrl={coverUrl}
                             covers={mosaic}
                           />
-                          <span
-                            className="plmore"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              openPlaylistRadio(p)
-                            }}
-                            title="Radio de cette playlist"
-                          >{isOpeningRadio ? "…" : "···"}</span>
                           <div className="plcaption">{p.name}</div>
                         </div>
                       )
@@ -2368,13 +1856,6 @@ function MusicPanel({statusBlock, homeBlock}) {
                       <div className="tname">{t.title}</div>
                       <div className="tartist">{t.artist}{t.album ? ` · ${t.album}` : ""}</div>
                     </div>
-                    {(t.isrc || t.deezer_id) && (
-                      <span
-                        className="reco-radio-inline"
-                        onClick={(e) => { e.stopPropagation(); openTrackRadio(t) }}
-                        title="Radio de ce titre"
-                      >{openingRadio === (t.isrc || ("d:" + t.deezer_id)) ? "…" : "↻"}</span>
-                    )}
                     <span className="ibtn inlib" onClick={(e) => { e.stopPropagation(); playInAppleMusic(t) }} title="Lire dans Apple Music">♪</span>
                   </div>
                 ))}

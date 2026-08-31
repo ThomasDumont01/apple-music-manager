@@ -29,7 +29,6 @@ _DEFAULTS = {
     "install_id": "",
     "telemetry_consent": True,
     "youtube_cookies": False,
-    "lastfm_api_key": "",
     # Spotify OAuth (PKCE) — populated by `spotify-login`.
     # Tokens are chmod'd 600 by `services/spotify.save_tokens`.
     "spotify_client_id": "",
@@ -85,8 +84,6 @@ class Paths:
         self.tracks_path = os.path.join(data_dir, "tracks.json")
         self.albums_path = os.path.join(data_dir, "albums.json")
         self.preferences_path = os.path.join(data_dir, "preferences.json")
-        self.recommendations_path = os.path.join(data_dir, "recommendations.json")
-        self.signals_log_path = os.path.join(data_dir, "signals.jsonl")
         self.logs_path = os.path.join(data_dir, "logs.jsonl")
 
         # Widget/CLI coordination — lives under config dir so it persists

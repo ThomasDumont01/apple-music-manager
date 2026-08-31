@@ -15,7 +15,6 @@ from music_manager.core.logger import init_logger
 from music_manager.core.setup import choose_data_root, create_data_folders
 from music_manager.services.albums import Albums
 from music_manager.services.apple import Apple
-from music_manager.services.recommendations_store import RecommendationsStore
 from music_manager.services.tracks import Tracks
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -43,12 +42,6 @@ _CLI_COMMANDS = frozenset(
         "playlist-local-tracks",
         "import-cancel",
         "install-widget",
-        "recos-feed",
-        "recos-track-radio",
-        "recos-artist-radio",
-        "recos-mixes",
-        "recos-mix-tracks",
-        "recos-playlist-radio",
     }
 )
 
@@ -154,10 +147,9 @@ def _run_ui() -> None:
     apple = Apple()
     tracks = Tracks(paths.tracks_path) if config["setup_done"] else None
     albums = Albums(paths.albums_path) if config["setup_done"] else None
-    recs = RecommendationsStore(paths.recommendations_path) if config["setup_done"] else None
 
     # ── Single-instance guard ────────────────────────────
-    # Two UIs writing to recommendations.json / tracks.json in parallel
+    # Two UIs writing to tracks.json in parallel
     # would corrupt the stores. The lock is acquired by ``MusicApp.on_mount``;
     # here we just refuse to start when a live PID already holds it.
     from music_manager.cli.lock import (  # noqa: PLC0415
@@ -184,7 +176,6 @@ def _run_ui() -> None:
         setup_done=bool(config["setup_done"]),
         tracks_store=tracks,
         albums_store=albums,
-        recs_store=recs,
         paths=paths,
         apple=apple,
         requests_path=paths.requests_path,

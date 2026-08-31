@@ -100,30 +100,6 @@ def dispatch(args: list[str]) -> int:
         from music_manager.cli.install_widget import main as cmd  # noqa: PLC0415
 
         return cmd(rest)
-    if name == "recos-feed":
-        from music_manager.cli.recos_feed import main as cmd  # noqa: PLC0415
-
-        return cmd(rest)
-    if name == "recos-track-radio":
-        from music_manager.cli.recos_track_radio import main as cmd  # noqa: PLC0415
-
-        return cmd(rest)
-    if name == "recos-artist-radio":
-        from music_manager.cli.recos_artist_radio import main as cmd  # noqa: PLC0415
-
-        return cmd(rest)
-    if name == "recos-mixes":
-        from music_manager.cli.recos_mixes import main as cmd  # noqa: PLC0415
-
-        return cmd(rest)
-    if name == "recos-mix-tracks":
-        from music_manager.cli.recos_mix_tracks import main as cmd  # noqa: PLC0415
-
-        return cmd(rest)
-    if name == "recos-playlist-radio":
-        from music_manager.cli.recos_playlist_radio import main as cmd  # noqa: PLC0415
-
-        return cmd(rest)
 
     _print_usage()
     return 2
@@ -156,9 +132,6 @@ def _print_usage() -> None:
         "  exportify-process-csv <ABSOLUTE_PATH>\n"
         "  playlist-local-tracks <NAME>\n"
         "  import-cancel\n"
-        "  install-widget\n"
-        "  recos-feed [--sections=all] [--max-per-section=N] [--force-refresh]\n"
-        "  recos-track-radio <ISRC>\n"
-        '  recos-artist-radio "<artist>"',
+        "  install-widget",
         file=sys.stderr,
     )

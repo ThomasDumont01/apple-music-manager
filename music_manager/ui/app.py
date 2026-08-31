@@ -7,7 +7,6 @@ from textual.app import App
 from music_manager.core.config import Paths
 from music_manager.services.albums import Albums
 from music_manager.services.apple import Apple
-from music_manager.services.recommendations_store import RecommendationsStore
 from music_manager.services.tracks import Tracks
 
 # ── Constants ───────────────────────────────────────────────────────────────
@@ -33,14 +32,12 @@ class MusicApp(App):
         apple: Apple | None = None,
         requests_path: str = "",
         playlists_dir: str = "",
-        recs_store: RecommendationsStore | None = None,
     ) -> None:
         super().__init__()
         self.theme = "ansi-dark"
         self.setup_done = setup_done
         self.tracks_store = tracks_store
         self.albums_store = albums_store
-        self.recs_store = recs_store
         self.paths = paths
         self.apple = apple
         self.requests_path = requests_path
@@ -101,7 +98,6 @@ class MusicApp(App):
         if self.paths:
             self.tracks_store = Tracks(self.paths.tracks_path)
             self.albums_store = Albums(self.paths.albums_path)
-            self.recs_store = RecommendationsStore(self.paths.recommendations_path)
         self._launch_menu(tracks_total, isrc_count)
 
     def _launch_menu_with_background_scan(self) -> None:
@@ -128,9 +124,6 @@ class MusicApp(App):
         """Push MenuScreen with current stats."""
         from music_manager.ui.screens.menu import MenuScreen  # noqa: PLC0415
 
-        if self.recs_store is None and self.paths is not None:
-            self.recs_store = RecommendationsStore(self.paths.recommendations_path)
-
         self.switch_screen(
             MenuScreen(
                 tracks_count=tracks_count,
@@ -138,7 +131,6 @@ class MusicApp(App):
                 identified_count=identified_count,
                 tracks_store=self.tracks_store,
                 albums_store=self.albums_store,
-                recs_store=self.recs_store,
                 paths=self.paths,
                 requests_path=self.requests_path,
                 playlists_dir=self.playlists_dir,
