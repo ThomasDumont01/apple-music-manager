@@ -26,12 +26,6 @@ _DEFAULTS = {
     "data_root": "",
     "setup_done": False,
     "youtube_cookies": False,
-    # Spotify OAuth (PKCE) — populated by `spotify-login`.
-    # Tokens are chmod'd 600 by `services/spotify.save_tokens`.
-    "spotify_client_id": "",
-    "spotify_access_token": "",
-    "spotify_refresh_token": "",
-    "spotify_token_expiry": 0.0,
 }
 
 

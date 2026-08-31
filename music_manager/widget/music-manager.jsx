@@ -1647,19 +1647,17 @@ function MusicPanel({statusBlock, homeBlock}) {
   return (
     <div className="scroll">
       <audio ref={audioRef} onEnded={() => setPlaying(null)}/>
-      {mode !== "spotify" && (
-        <div className="searchbox">
-          <svg className="ico" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>
-          </svg>
-          <input
-            placeholder={mode === "playlists" ? "Nom de playlist…" : "titre, artiste, album…"}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && <span className="clearbtn" onClick={() => setQuery("")}>×</span>}
-        </div>
-      )}
+      <div className="searchbox">
+        <svg className="ico" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>
+        </svg>
+        <input
+          placeholder={mode === "playlists" ? "Nom de playlist…" : "titre, artiste, album…"}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query && <span className="clearbtn" onClick={() => setQuery("")}>×</span>}
+      </div>
 
       <div className="modepills">
         <div
