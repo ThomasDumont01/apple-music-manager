@@ -6,7 +6,9 @@ All other checks run inside Textual screens for visual feedback.
 
 import os
 import sys
+from typing import TextIO
 
+from music_manager import __version__
 from music_manager.core.checks import check_macos
 from music_manager.core.config import Paths, load_config, save_config
 from music_manager.core.logger import init_logger
@@ -40,6 +42,7 @@ _CLI_COMMANDS = frozenset(
         "exportify-process-csv",
         "playlist-local-tracks",
         "import-cancel",
+        "install-widget",
         "recos-feed",
         "recos-track-radio",
         "recos-artist-radio",
@@ -50,16 +53,57 @@ _CLI_COMMANDS = frozenset(
 )
 
 
-def main() -> None:
+
+def _print_usage(stream: TextIO | None = None) -> None:
+    """Print the top-level usage, including every CLI sub-command."""
+    out = stream if stream is not None else sys.stdout
+    print(
+        f"music-manager {__version__}\n"
+        "\n"
+        "Sans argument : lance l'application.\n"
+        "\n"
+        "Options :\n"
+        "  -h, --help     affiche cette aide\n"
+        "  -V, --version  affiche la version\n"
+        "\n"
+        "Sous-commandes (destinées au widget et aux scripts) :\n"
+        "  " + "\n  ".join(sorted(_CLI_COMMANDS)),
+        file=out,
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
     """Launch Music Manager (or dispatch a CLI sub-command)."""
+    args = sys.argv[1:] if argv is None else argv
+
     # ── CLI fast path (widget / scripts) ─────────────────
     # Sub-commands skip the Textual UI entirely. Zero overhead for normal
     # launches: the import below only runs when a sub-command was requested.
-    if len(sys.argv) > 1 and sys.argv[1] in _CLI_COMMANDS:
+    if args and args[0] in _CLI_COMMANDS:
         from music_manager.cli import dispatch  # noqa: PLC0415
 
-        sys.exit(dispatch(sys.argv[1:]))
+        sys.exit(dispatch(args))
 
+    # ── Options, not sub-commands ────────────────────────
+    # Anything starting with "-" is a request for information or a typo.
+    # Falling through to the UI left the user in a full-screen app with no
+    # idea why `--help` had not printed anything.
+    if args and args[0].startswith("-"):
+        if args[0] in ("-h", "--help"):
+            _print_usage()
+            sys.exit(0)
+        if args[0] in ("-V", "--version"):
+            print(f"music-manager {__version__}")
+            sys.exit(0)
+        print(f"Option inconnue : {args[0]}\n", file=sys.stderr)
+        _print_usage(stream=sys.stderr)
+        sys.exit(2)
+
+    _run_ui()
+
+
+def _run_ui() -> None:
+    """Boot the Textual application."""
     # ── Platform ─────────────────────────────────────────
     if not check_macos():
         sys.exit("Music Manager nécessite macOS.")
