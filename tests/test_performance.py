@@ -7,7 +7,6 @@ import pytest
 
 from music_manager.core.normalize import first_artist, is_match, normalize
 from music_manager.options.find_duplicates import find_duplicates
-from music_manager.options.snapshot import snapshot
 from music_manager.services.tracks import Tracks
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
@@ -172,24 +171,6 @@ def test_find_duplicates_performance(large_store: Tracks) -> None:
 
 
 # ── Snapshot ────────────────────────────────────────────────────────────────
-
-
-def test_snapshot_performance(large_store: Tracks) -> None:
-    """snapshot on 5000 tracks completes in under 0.1s."""
-    for i, entry in enumerate(large_store.all().values()):
-        if i % 3 == 0:
-            entry["origin"] = "imported"
-            entry["status"] = "done"
-
-    start = time.perf_counter()
-    count = snapshot(large_store)
-    elapsed = time.perf_counter() - start
-
-    assert count > 0
-    assert elapsed < 0.1, f"snapshot on {len(large_store.all())} tracks took {elapsed:.3f}s"
-
-
-# ── ISRC index ──────────────────────────────────────────────────────────────
 
 
 def test_isrc_lookup_performance(large_store: Tracks) -> None:

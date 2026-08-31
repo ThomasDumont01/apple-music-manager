@@ -3,9 +3,12 @@
 import os
 import shutil
 
-from music_manager.core.io import save_json
-from music_manager.services.apple import delete_tracks
 from music_manager.services.tracks import Tracks
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+_DATA_ITEMS = (".data", ".tmp", "playlists", "raccourcis", "requetes.csv")
+
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
@@ -20,30 +23,6 @@ def reset_failed(tracks_store: Tracks) -> int:
     if count > 0:
         tracks_store.save()
     return count
-
-
-def clear_preferences(preferences_path: str) -> None:
-    """Clear all user preferences."""
-    save_json(preferences_path, {})
-
-
-def revert_imports(tracks_store: Tracks) -> int:
-    """Delete all imported tracks from Apple Music and tracks.json. Returns count."""
-    to_delete = []
-    for apple_id, entry in list(tracks_store.all().items()):
-        if entry.get("origin") == "imported" and entry.get("status") == "done":
-            to_delete.append(apple_id)
-
-    if to_delete:
-        delete_tracks(to_delete)
-        for apple_id in to_delete:
-            tracks_store.remove(apple_id)
-        tracks_store.save()
-
-    return len(to_delete)
-
-
-_DATA_ITEMS = (".data", ".tmp", "playlists", "raccourcis", "requetes.csv")
 
 
 def move_data(old_root: str, new_root: str) -> bool:

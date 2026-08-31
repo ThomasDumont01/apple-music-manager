@@ -18,10 +18,7 @@ TOOLS_ITEMS: list[tuple[str, str] | None] = [
 ]
 
 MAINTENANCE_ITEMS: list[tuple[str, str] | None] = [
-    ("snapshot", "Valider les imports comme existants"),
     ("reset_failed", "Relancer les imports échoués"),
-    ("clear_prefs", "Réinitialiser les préférences"),
-    ("revert", "Annuler tous les imports"),
     ("move_data", "Déplacer le dossier de données"),
     None,
     ("delete_all", "Supprimer toutes les données"),
@@ -243,7 +240,6 @@ HELP_MODIFY_COVERS = "↑↓  naviguer    ⏎  sélectionner    p  voir    esc  
 
 # ── Maintenance labels ─────────────────────────────────────────────────────
 
-MAINT_CONFIRM_REVERT = "Supprimer {} import(s) d'Apple Music ?"
 MAINT_CONFIRM_DELETE = "Supprimer toutes les données Music Manager ?"
 MAINT_CONFIRM = "Confirmer"
 MAINT_CANCEL = "Annuler"

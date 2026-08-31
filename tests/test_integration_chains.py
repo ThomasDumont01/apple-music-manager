@@ -1,7 +1,7 @@
 """Integration tests — cross-module data flow chains.
 
 Tests the handoff between modules: fix_metadata → store → dedup,
-modify → store → dedup, snapshot → reset_failed, ignored tracks consistency.
+modify → store → dedup, ignored tracks consistency.
 All external services mocked.
 """
 
@@ -13,9 +13,7 @@ from music_manager.core.io import load_json, save_csv, save_json
 from music_manager.core.models import Track
 from music_manager.options.fix_metadata import Divergence, apply_corrections
 from music_manager.options.import_tracks import process_csv
-from music_manager.options.maintenance import reset_failed
 from music_manager.options.modify_track import change_edition
-from music_manager.options.snapshot import snapshot
 from music_manager.pipeline.dedup import is_duplicate
 from music_manager.services.albums import Albums
 from music_manager.services.resolver import ResolveResult
@@ -341,152 +339,6 @@ class TestModifyStoreDedup:
         # AP1 replaced
         assert tracks.get_by_apple_id("AP1") is None
         assert tracks.get_by_apple_id("AP1_NEW") is not None
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# 3. snapshot → reset_failed roundtrip
-# ══════════════════════════════════════════════════════════════════════════
-
-
-class TestSnapshotResetFailed:
-    """snapshot promotes, reset_failed resets, both persist correctly."""
-
-    def test_snapshot_promotes_imported_done(self, tmp_path: Path) -> None:
-        """snapshot changes origin from imported to baseline for done tracks."""
-        path = str(tmp_path / "t.json")
-        tracks = Tracks(path)
-
-        tracks.add(
-            "AP1",
-            {"title": "A", "artist": "X", "origin": "imported", "status": "done", "deezer_id": 1},
-        )
-        tracks.add(
-            "AP2",
-            {"title": "B", "artist": "Y", "origin": "imported", "status": "done", "deezer_id": 2},
-        )
-        tracks.add(
-            "AP3",
-            {"title": "C", "artist": "Z", "origin": "baseline", "status": None, "deezer_id": None},
-        )
-
-        count = snapshot(tracks)
-        assert count == 2
-        entry = tracks.get_by_apple_id("AP1")
-        assert entry is not None
-        assert entry["origin"] == "baseline"
-        entry2 = tracks.get_by_apple_id("AP2")
-        assert entry2 is not None
-        assert entry2["origin"] == "baseline"
-        # Already baseline — unchanged
-        entry3 = tracks.get_by_apple_id("AP3")
-        assert entry3 is not None
-        assert entry3["origin"] == "baseline"
-
-    def test_snapshot_persists_to_disk(self, tmp_path: Path) -> None:
-        """After snapshot, reloading store still shows promoted tracks."""
-        path = str(tmp_path / "t.json")
-        tracks = Tracks(path)
-
-        tracks.add(
-            "AP1",
-            {"title": "A", "artist": "X", "origin": "imported", "status": "done", "deezer_id": 1},
-        )
-        snapshot(tracks)
-
-        # Reload from disk
-        tracks2 = Tracks(path)
-        entry = tracks2.get_by_apple_id("AP1")
-        assert entry is not None
-        assert entry["origin"] == "baseline"
-
-    def test_reset_failed_clears_status(self, tmp_path: Path) -> None:
-        """reset_failed sets status=None and clears fail_reason."""
-        path = str(tmp_path / "t.json")
-        tracks = Tracks(path)
-
-        tracks.add(
-            "AP1",
-            {"title": "A", "artist": "X", "status": "failed", "fail_reason": "youtube_failed"},
-        )
-        tracks.add("AP2", {"title": "B", "artist": "Y", "status": "done"})
-        tracks.add(
-            "AP3", {"title": "C", "artist": "Z", "status": "failed", "fail_reason": "network"}
-        )
-
-        count = reset_failed(tracks)
-        assert count == 2
-
-        entry1 = tracks.get_by_apple_id("AP1")
-        assert entry1 is not None
-        assert entry1["status"] is None
-        assert entry1["fail_reason"] == ""
-        entry2 = tracks.get_by_apple_id("AP2")
-        assert entry2 is not None
-        assert entry2["status"] == "done"  # untouched
-        entry3 = tracks.get_by_apple_id("AP3")
-        assert entry3 is not None
-        assert entry3["status"] is None
-
-    def test_reset_failed_persists_dirty_flag(self, tmp_path: Path) -> None:
-        """reset_failed uses update() which sets _dirty, then save() persists."""
-        path = str(tmp_path / "t.json")
-        tracks = Tracks(path)
-
-        tracks.add("AP1", {"title": "A", "artist": "X", "status": "failed", "fail_reason": "err"})
-        # Save initial state
-        tracks.save()
-
-        # Reset and verify it persists
-        reset_failed(tracks)
-
-        # Reload — must reflect the reset
-        tracks2 = Tracks(path)
-        entry1 = tracks2.get_by_apple_id("AP1")
-        assert entry1 is not None
-        assert entry1["status"] is None
-        assert entry1["fail_reason"] == ""
-
-    def test_snapshot_then_reset_failed_roundtrip(self, tmp_path: Path) -> None:
-        """Full lifecycle: import → snapshot → fail → reset → verify."""
-        path = str(tmp_path / "t.json")
-        tracks = Tracks(path)
-
-        # Start with imported+done tracks
-        tracks.add(
-            "AP1",
-            {"title": "A", "artist": "X", "origin": "imported", "status": "done", "deezer_id": 1},
-        )
-        tracks.add(
-            "AP2",
-            {"title": "B", "artist": "Y", "origin": "imported", "status": "done", "deezer_id": 2},
-        )
-
-        # Snapshot promotes to baseline
-        snapshot(tracks)
-        entry1 = tracks.get_by_apple_id("AP1")
-        assert entry1 is not None
-        assert entry1["origin"] == "baseline"
-
-        # Simulate failure on AP2
-        tracks.update("AP2", {"status": "failed", "fail_reason": "network_error"})
-        tracks.save()
-
-        # Reset failed
-        count = reset_failed(tracks)
-        assert count == 1
-        entry2 = tracks.get_by_apple_id("AP2")
-        assert entry2 is not None
-        assert entry2["status"] is None
-        assert entry2["origin"] == "baseline"  # origin preserved
-
-        # Verify persistence
-        tracks2 = Tracks(path)
-        entry1 = tracks2.get_by_apple_id("AP1")
-        assert entry1 is not None
-        assert entry1["status"] == "done"
-        entry2 = tracks2.get_by_apple_id("AP2")
-        assert entry2 is not None
-        assert entry2["status"] is None
 
 
 # ══════════════════════════════════════════════════════════════════════════

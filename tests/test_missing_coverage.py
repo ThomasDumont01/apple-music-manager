@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 from music_manager.core.io import load_json, save_json
 from music_manager.core.normalize import normalize, prepare_title
 from music_manager.options.export import export_playlist
-from music_manager.options.maintenance import clear_preferences
 from music_manager.services.albums import Albums
 from music_manager.services.tracks import Tracks
 
@@ -202,22 +201,6 @@ def test_export_playlist_empty(tmp_path: Path) -> None:
 
 # ══════════════════════════════════════════════════════════════════════════
 # Maintenance
-# ══════════════════════════════════════════════════════════════════════════
-
-
-def test_clear_preferences(tmp_path: Path) -> None:
-    """clear_preferences resets the preferences file."""
-    prefs_path = str(tmp_path / "prefs.json")
-    save_json(prefs_path, {"ignored_albums": ["Album1"], "refusals": {"key": "val"}})
-
-    clear_preferences(prefs_path)
-
-    data = load_json(prefs_path)
-    assert data == {}
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# JSON corruption recovery
 # ══════════════════════════════════════════════════════════════════════════
 
 

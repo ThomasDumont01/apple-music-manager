@@ -1,16 +1,12 @@
 """Tests for options/maintenance.py — reset, clear, revert operations."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-from music_manager.core.io import load_json, save_json
 from music_manager.options.maintenance import (
-    clear_preferences,
     delete_all,
     reset_failed,
-    revert_imports,
 )
 from music_manager.services.tracks import Tracks
 
@@ -46,52 +42,6 @@ def test_reset_failed_nothing_to_reset(tmp_path: Path) -> None:
 
     count = reset_failed(tracks)
     assert count == 0
-
-
-# ── clear_preferences ──────────────────────────────────────────────────────
-
-
-def test_clear_preferences(tmp_path: Path) -> None:
-    """Preferences file is replaced with empty dict."""
-    prefs_path = str(tmp_path / "prefs.json")
-    save_json(prefs_path, {"refusals": {"A1:title": "val"}, "ignored_albums": ["Album"]})
-
-    clear_preferences(prefs_path)
-
-    prefs = load_json(prefs_path)
-    assert prefs == {}
-
-
-# ── revert_imports ─────────────────────────────────────────────────────────
-
-
-@patch(f"{_PATCH}.delete_tracks")
-def test_revert_imports_deletes_imported(mock_delete, tmp_path: Path) -> None:
-    """Imported tracks are deleted from Apple Music and store."""
-    tracks = Tracks(str(tmp_path / "tracks.json"))
-    tracks.add("A1", {"title": "Imported 1", "origin": "imported", "status": "done"})
-    tracks.add("A2", {"title": "Imported 2", "origin": "imported", "status": "done"})
-    tracks.add("A3", {"title": "Baseline", "origin": "baseline"})
-
-    count = revert_imports(tracks)
-
-    assert count == 2
-    mock_delete.assert_called_once_with(["A1", "A2"])
-    assert tracks.get_by_apple_id("A1") is None
-    assert tracks.get_by_apple_id("A2") is None
-    assert tracks.get_by_apple_id("A3") is not None
-
-
-@patch(f"{_PATCH}.delete_tracks")
-def test_revert_imports_nothing_to_revert(mock_delete, tmp_path: Path) -> None:
-    """No imported tracks → returns 0, no delete call."""
-    tracks = Tracks(str(tmp_path / "tracks.json"))
-    tracks.add("A1", {"title": "Baseline", "origin": "baseline"})
-
-    count = revert_imports(tracks)
-
-    assert count == 0
-    mock_delete.assert_not_called()
 
 
 # ── delete_all ─────────────────────────────────────────────────────────────
