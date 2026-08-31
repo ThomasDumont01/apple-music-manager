@@ -166,6 +166,22 @@ Certaines pistes peuvent echouer si :
 
 Ces pistes passent en **revue manuelle** ou vous pouvez choisir parmi les alternatives proposees.
 
+### Tous les imports echouent avec "Apple Music a refuse ..."
+
+Apple Music copie le fichier dans son dossier Musique avant de l'ajouter a
+la bibliotheque. Si ce dossier est introuvable, la copie echoue, aucune
+piste n'est ajoutee et l'import s'arrete la. Apple Music affiche alors une
+notification du type *"Echec de la tentative de copie sur le disque"*, avec
+parfois un nom de disque vide.
+
+Verifiez ou pointe le reglage : **Musique -> Reglages -> Fichiers ->
+Emplacement du dossier Musique**. Si le dossier indique n'existe plus
+(disque externe debranche, dossier renomme ou deplace), corrigez-le, ou
+recreez le dossier manquant.
+
+Attention : ne renommez pas un dossier qui contient deja vos fichiers
+audio, vos pistes deviendraient introuvables dans Apple Music.
+
 ## Licence
 
 [MIT](LICENSE)
