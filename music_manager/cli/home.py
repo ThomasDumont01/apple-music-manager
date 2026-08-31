@@ -22,9 +22,13 @@ Apple Music silent, etc.) — the widget handles that gracefully.
 """
 
 import argparse
+import functools
 import json
 import os
+import plistlib
+import subprocess
 import sys
+import urllib.parse
 
 from music_manager.core.config import Paths, load_config
 from music_manager.core.io import load_json
@@ -36,18 +40,55 @@ _DEFAULT_PLAYLIST_LIMIT = 30
 
 # Covers live next to the widget JSX so Übersicht can load them with a
 # relative URL — `file://` paths to other folders are blocked by WebKit.
-_DEFAULT_WIDGET_COVERS_DIR = os.path.expanduser(
-    "~/Library/Application Support/Übersicht/widgets/music-manager.assets"
+_ASSETS_DIRNAME = "music-manager.assets"
+_DEFAULT_UBERSICHT_WIDGETS_DIR = os.path.expanduser(
+    "~/Library/Application Support/Übersicht/widgets"
 )
-_SYNCED_WIDGET_COVERS_DIR = (
-    "/Users/thomas/SynologyDrive/perso/codage/Übersicht/widgets/music-manager.assets"
-)
-_WIDGET_COVERS_DIR = os.environ.get(
-    "MUSIC_MANAGER_WIDGET_ASSETS_DIR",
-    _SYNCED_WIDGET_COVERS_DIR
-    if os.path.isdir(os.path.dirname(_SYNCED_WIDGET_COVERS_DIR))
-    else _DEFAULT_WIDGET_COVERS_DIR,
-)
+_UBERSICHT_DOMAIN = "tracesOf.Uebersicht"
+
+def _widget_covers_dir() -> str:
+    """Folder the widget reads its cached covers from.
+
+    ``MUSIC_MANAGER_WIDGET_ASSETS_DIR`` is the escape hatch for setups the
+    discovery can't see; otherwise we follow Übersicht's own configuration
+    and fall back to the folder it ships with.
+    """
+    override = os.environ.get("MUSIC_MANAGER_WIDGET_ASSETS_DIR")
+    if override:
+        return override
+    widgets_dir = _ubersicht_widget_dir() or _DEFAULT_UBERSICHT_WIDGETS_DIR
+    return os.path.join(widgets_dir, _ASSETS_DIRNAME)
+
+
+@functools.lru_cache(maxsize=1)
+def _ubersicht_widget_dir() -> str:
+    """Übersicht's configured widgets folder, or "" when undiscoverable.
+
+    Users can move that folder, and Übersicht records it as an
+    NSKeyedArchiver-encoded NSURL nested inside its preferences domain — not
+    as a plain path. The archive keeps the URL as a bare string in
+    ``$objects``, so stdlib plistlib is enough to read it back.
+    """
+    try:
+        raw = subprocess.run(
+            ["/usr/bin/defaults", "export", _UBERSICHT_DOMAIN, "-"],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        ).stdout
+        if not raw:
+            return ""
+        archived = plistlib.loads(raw).get("widgetDirectory")
+        if not isinstance(archived, bytes):
+            return ""
+        for item in plistlib.loads(archived).get("$objects") or []:
+            if isinstance(item, str) and item.startswith("file://"):
+                path = urllib.parse.unquote(urllib.parse.urlparse(item).path)
+                return path.rstrip("/")
+    except (OSError, ValueError, plistlib.InvalidFileException, subprocess.SubprocessError):
+        return ""
+    return ""
+
 
 # Apple Music ships with built-in smart playlists that pollute the list.
 # We hide them by exact name match (the widget can offer them if a user
@@ -155,7 +196,7 @@ def _playlists(limit: int) -> list[dict]:
 
         # Exclut le dossier "for me" (recos Apple Music) : ces playlists
         # ne doivent jamais apparaître dans le widget, même via "Voir tout".
-        raw = list_playlists_with_covers(_WIDGET_COVERS_DIR, exclude_folder="for me")
+        raw = list_playlists_with_covers(_widget_covers_dir(), exclude_folder="for me")
     except Exception:  # noqa: BLE001
         return []
 
@@ -165,11 +206,11 @@ def _playlists(limit: int) -> list[dict]:
         if not name or name in _PLAYLIST_BLACKLIST:
             continue
         cover_path = str(entry.get("cover_path") or "")
-        # Return the path relative to _WIDGET_COVERS_DIR so the widget can
+        # Return the path relative to _widget_covers_dir() so the widget can
         # build a URL like `url("music-manager.assets/<relpath>")`. This
         # preserves any subdir (e.g. "custom/chill.jpg") for user overrides.
-        if cover_path and cover_path.startswith(_WIDGET_COVERS_DIR + os.sep):
-            cover_filename = os.path.relpath(cover_path, _WIDGET_COVERS_DIR)
+        if cover_path and cover_path.startswith(_widget_covers_dir() + os.sep):
+            cover_filename = os.path.relpath(cover_path, _widget_covers_dir())
         elif cover_path:
             cover_filename = os.path.basename(cover_path)
         else:
@@ -198,6 +239,6 @@ def _asset_filename(path: object) -> str:
     raw = str(path or "")
     if not raw:
         return ""
-    if raw.startswith(_WIDGET_COVERS_DIR + os.sep):
-        return os.path.relpath(raw, _WIDGET_COVERS_DIR)
+    if raw.startswith(_widget_covers_dir() + os.sep):
+        return os.path.relpath(raw, _widget_covers_dir())
     return os.path.basename(raw)
