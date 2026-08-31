@@ -69,7 +69,7 @@ music-manager
 
 Un widget [Ubersicht](https://tracesof.net/uebersicht/) pose Music Manager
 directement sur le bureau : recherche Deezer, apercu et import de playlists,
-suivi d'import en direct, lecture Apple Music et recommandations.
+suivi d'import en direct et lecture Apple Music.
 
 Le widget pilote l'application installee — il ne duplique aucune logique.
 
