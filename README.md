@@ -35,6 +35,7 @@ Music Manager                                502 pistes · 34 albums
 - **Trouver les doublons** : detecter et supprimer les morceaux en double
 - **Modifier une piste** : changer d'edition, de pochette, re-telecharger l'audio
 - **Exporter une playlist** : sauvegarder vos playlists Apple Music en CSV
+- **Widget bureau** (optionnel) : recherche, import et lecture depuis le bureau, via Ubersicht
 
 ## Pre-requis
 
@@ -53,6 +54,7 @@ Music Manager                                502 pistes · 34 albums
    - Installe Homebrew si absent
    - Installe ffmpeg et yt-dlp via brew
    - Installe Music Manager dans `/Applications`
+   - Installe le widget Ubersicht si Ubersicht est present
 5. L'app s'ouvre automatiquement a la fin
 
 ### Via la ligne de commande
@@ -62,6 +64,37 @@ brew install ffmpeg yt-dlp
 uv tool install music-manager
 music-manager
 ```
+
+## Widget bureau (optionnel)
+
+Un widget [Ubersicht](https://tracesof.net/uebersicht/) pose Music Manager
+directement sur le bureau : recherche Deezer, apercu et import de playlists,
+suivi d'import en direct, lecture Apple Music et recommandations.
+
+Le widget pilote l'application installee — il ne duplique aucune logique.
+
+**Installation**
+
+1. Installer [Ubersicht](https://tracesof.net/uebersicht/) et le lancer une fois
+2. Lancer :
+
+```bash
+music-manager install-widget
+```
+
+3. Menu Ubersicht -> **Refresh all widgets**
+
+Si vous installez Ubersicht *avant* le DMG, l'installeur pose le widget tout
+seul. La commande est idempotente : relancez-la apres chaque mise a jour pour
+garder le widget synchronise avec l'application. Un widget que vous auriez
+modifie a la main est sauvegarde en `.jsx.bak` avant remplacement.
+
+**Ou vivent les fichiers**
+
+Le widget et son cache de pochettes sont copies dans le dossier de widgets
+declare par Ubersicht (par defaut
+`~/Library/Application Support/Ubersicht/widgets/`). Pour forcer un autre
+emplacement, definir `MUSIC_MANAGER_WIDGET_ASSETS_DIR`.
 
 ## Premier lancement
 
