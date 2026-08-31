@@ -22,6 +22,7 @@ from music_manager.services.apple import (
 )
 
 _PATCH = "music_manager.services.apple.run_applescript"
+_PATCH_RESULT = "music_manager.services.apple.run_applescript_result"
 
 
 # ── _esc ────────────────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ def test_update_track_escapes_values(mock_script) -> None:
 # ── import_file ─────────────────────────────────────────────────────────────
 
 
-@patch(_PATCH, return_value="NEW_ID_123")
+@patch(_PATCH_RESULT, return_value=(True, "NEW_ID_123", ""))
 def test_import_file_returns_apple_id(mock_script) -> None:
     """import_file returns the apple_id from AppleScript output."""
     result = import_file("/tmp/song.m4a")
@@ -131,10 +132,10 @@ def test_import_file_returns_apple_id(mock_script) -> None:
     assert "persistent ID" in script
 
 
-@patch(_PATCH, return_value=None)
+@patch(_PATCH_RESULT, return_value=(False, "", "boom"))
 def test_import_file_raises_on_failure(mock_script) -> None:
     """import_file raises RuntimeError when AppleScript fails."""
-    with pytest.raises(RuntimeError, match="Import failed"):
+    with pytest.raises(RuntimeError, match="refus"):
         import_file("/tmp/song.m4a")
 
 
@@ -406,3 +407,45 @@ def test_get_playlist_membership_empty(mock_run) -> None:
 
 
 # ── Folder + playlist-in-folder helpers ────────────────────────────────────
+
+
+# ── import_file — diagnosability ─────────────────────────────────────────────
+
+
+@patch(_PATCH_RESULT)
+def test_import_file_reports_the_applescript_error(mock_run) -> None:
+    """The AppleScript failure text must reach the caller.
+
+    Regression: import_file() went through run_applescript(), which drops
+    stderr. When Apple Music's media folder went missing, every import died
+    with a bare "no ID returned" while Apple Music was in fact reporting
+    "the required file could not be found" — the actual cause never made it
+    to the log, and the app looked broken instead of Apple Music.
+    """
+    mock_run.return_value = (False, "", "Music got an error: file not found (-43)")
+
+    with pytest.raises(RuntimeError) as exc:
+        import_file("/tmp/song.m4a")
+
+    assert "file not found" in str(exc.value)
+    assert "/tmp/song.m4a" in str(exc.value)
+
+
+@patch(_PATCH_RESULT)
+def test_import_file_reports_a_silent_refusal(mock_run) -> None:
+    """Apple Music can succeed yet add nothing — say so explicitly.
+
+    With a broken media folder the `add` command exits 0 and returns an
+    empty result, so there is no stderr to quote. The message must still
+    tell the user Apple Music refused the file rather than blaming an ID.
+    """
+    mock_run.return_value = (True, "", "")
+
+    with pytest.raises(RuntimeError) as exc:
+        import_file("/tmp/song.m4a")
+
+    message = str(exc.value)
+    assert "/tmp/song.m4a" in message
+    assert "refus" in message.lower() or "refused" in message.lower()
+
+

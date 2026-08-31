@@ -61,7 +61,10 @@ class Apple:
 def import_file(filepath: str) -> str:
     """Import an audio file into Apple Music. Returns the persistent apple_id.
 
-    Raises RuntimeError if import fails.
+    Raises RuntimeError if import fails, quoting what Apple Music said.
+    Going through ``run_applescript`` here dropped that text, so a broken
+    media folder — Apple Music copies the file there before adding it —
+    surfaced only as a missing ID and looked like our bug.
     """
     abs_path = os.path.abspath(filepath)
     script = (
@@ -70,9 +73,17 @@ def import_file(filepath: str) -> str:
         "    return persistent ID of t\n"
         "end tell"
     )
-    apple_id = run_applescript(script)
+    ok, apple_id, error = run_applescript_result(script)
+    if not ok:
+        raise RuntimeError(f"Apple Music a refusé {filepath} : {error}")
     if not apple_id:
-        raise RuntimeError(f"Import failed: no ID returned for {filepath}")
+        # `add` exited cleanly but returned nothing: Apple Music accepted the
+        # command and added no track. The usual cause is a media folder it
+        # can no longer write to.
+        raise RuntimeError(
+            f"Apple Music a refusé {filepath} sans message. "
+            "Vérifie Musique > Réglages > Fichiers > Emplacement du dossier Musique."
+        )
     return apple_id
 
 
