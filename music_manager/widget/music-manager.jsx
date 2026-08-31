@@ -129,7 +129,7 @@ export const className = `
   .sectitle:not(:first-child) { margin-top: 18px; }
 
   /* Animation stagger sur les items des listes — appliquée au container */
-  .anim > .task, .anim > .evt, .anim > .row, .anim > .ses, .anim > .plcell {
+  .anim > .row, .anim > .plcell {
     opacity: 0; animation: rise 0.36s ease forwards;
   }
   .anim > *:nth-child(1) { animation-delay: 0.02s; }
@@ -142,6 +142,11 @@ export const className = `
   .anim > *:nth-child(8) { animation-delay: 0.23s; }
   .anim > *:nth-child(9) { animation-delay: 0.26s; }
   .anim > *:nth-child(n+10) { animation-delay: 0.28s; }
+
+  /* Colonne de texte flexible d'une ligne de piste. Définie côté
+     dashboard dans la section Tâches, d'où son absence à l'extraction :
+     sans elle les titres ne se tronquent plus et la ligne déborde. */
+  .body { flex: 1; min-width: 0; }
 
   /* ── Music ─────────────────────────────────── */
   .searchbox {
